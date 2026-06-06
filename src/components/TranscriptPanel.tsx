@@ -24,6 +24,7 @@ export function TranscriptPanel({
 }) {
   const result = useStore((s) => s.transcripts[video.id])
   const cacheTranscript = useStore((s) => s.cacheTranscript)
+  const clearTranscript = useStore((s) => s.clearTranscript)
 
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
@@ -221,12 +222,21 @@ export function TranscriptPanel({
   const showJump = !query && !following && activeIdx >= 0
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search transcript…"
-        className="mb-2 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-white outline-none focus:border-accent-500"
-      />
+      <div className="mb-2 flex items-center gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search transcript…"
+          className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-white outline-none focus:border-accent-500"
+        />
+        <button
+          onClick={() => clearTranscript(video.id)}
+          className="shrink-0 rounded-lg border border-ink-700 px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-ink-800 hover:text-zinc-200"
+          title="Remove transcript and re-load or replace"
+        >
+          Replace
+        </button>
+      </div>
       <div className="relative min-h-0 flex-1">
         <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto no-scrollbar">
         {filtered.length === 0 ? (
