@@ -29,7 +29,7 @@ export function PlaylistDetail() {
     return (
       <div className="mx-auto max-w-3xl text-center text-sm text-zinc-500">
         Playlist not found.{' '}
-        <Link to="/" className="text-sky-400 hover:underline">
+        <Link to="/" className="text-accent-400 hover:underline">
           Back to library
         </Link>
       </div>
@@ -62,7 +62,7 @@ export function PlaylistDetail() {
         {first && (
           <button
             onClick={() => navigate(`/watch/${first}?list=${playlist.id}`)}
-            className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500"
+            className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm font-medium text-white hover:bg-accent-500"
           >
             <PlayIcon className="h-4 w-4" /> Play all
           </button>
@@ -124,7 +124,7 @@ function VideoRow({
             <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover" />
           ) : null}
           {watched && (
-            <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-emerald-400">
+            <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-accent-400">
               <CheckIcon className="h-6 w-6" />
             </span>
           )}

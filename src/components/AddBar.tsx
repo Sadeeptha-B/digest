@@ -153,12 +153,12 @@ export function AddBar() {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Paste a YouTube playlist or video URL…"
-          className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+          className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
         />
         <button
           type="submit"
           disabled={busy || !value.trim()}
-          className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+          className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
         >
           {busy ? 'Adding…' : 'Add'}
         </button>
@@ -168,7 +168,7 @@ export function AddBar() {
         <button
           onClick={openPicker}
           disabled={pickerBusy || busy}
-          className="mt-2 text-sm text-sky-400 hover:underline disabled:opacity-40"
+          className="mt-2 text-sm text-accent-400 hover:underline disabled:opacity-40"
         >
           {importProgress
             ? `Importing ${importProgress.done}/${importProgress.total}…`
@@ -209,7 +209,7 @@ export function AddBar() {
                       >
                         <span
                           className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                            checked ? 'border-sky-500 bg-sky-600 text-white' : 'border-ink-600'
+                            checked ? 'border-accent-500 bg-accent-600 text-white' : 'border-ink-600'
                           }`}
                         >
                           {checked && (
@@ -232,7 +232,7 @@ export function AddBar() {
                 <button
                   onClick={importSelected}
                   disabled={selected.size === 0}
-                  className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+                  className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
                 >
                   Import {selected.size > 0 ? selected.size : ''}
                 </button>

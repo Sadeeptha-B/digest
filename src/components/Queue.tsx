@@ -25,7 +25,7 @@ export function Queue({
             <Link
               to={`/watch/${id}?list=${listId}`}
               className={`flex items-center gap-2.5 rounded-lg p-1.5 ${
-                isCurrent ? 'bg-sky-600/15 ring-1 ring-sky-600/40' : 'hover:bg-ink-800'
+                isCurrent ? 'bg-accent-600/15 ring-1 ring-accent-600/40' : 'hover:bg-ink-800'
               }`}
             >
               <div className="relative aspect-video w-24 shrink-0 overflow-hidden rounded bg-ink-800">
@@ -33,7 +33,7 @@ export function Queue({
                   <img src={v.thumbnailUrl} alt="" className="h-full w-full object-cover" />
                 ) : null}
                 {watched && !isCurrent && (
-                  <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-emerald-400">
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-accent-400">
                     <CheckIcon className="h-5 w-5" />
                   </span>
                 )}

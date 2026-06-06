@@ -99,7 +99,7 @@ function PlaylistRow({ playlist }: { playlist: Playlist }) {
       {firstUnwatched && (
         <Link
           to={`/watch/${firstUnwatched}?list=${playlist.id}`}
-          className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500"
+          className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500"
         >
           <PlayIcon className="h-4 w-4" /> Play
         </Link>
