@@ -33,7 +33,12 @@ export interface TranscriptLine {
 }
 
 export type TranscriptResult =
-  | { status: 'ok'; lines: TranscriptLine[]; source: 'official' | 'proxy'; fetchedAt: number }
+  | {
+      status: 'ok'
+      lines: TranscriptLine[]
+      source: 'official' | 'proxy' | 'manual'
+      fetchedAt: number
+    }
   | { status: 'unavailable'; reason: string }
 
 export interface AccessToken {

@@ -31,6 +31,8 @@ export function AddBar() {
   // "Import from my channel" picker state
   const [picker, setPicker] = useState<MyPlaylist[] | null>(null)
   const [pickerBusy, setPickerBusy] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
 
   const signedIn = Boolean(accessToken && accessToken.expiresAt > Date.now())
 
@@ -97,6 +99,7 @@ export function AddBar() {
 
   async function openPicker() {
     setError(null)
+    setSelected(new Set())
     setPickerBusy(true)
     try {
       const auth = await currentAuth()
@@ -112,20 +115,35 @@ export function AddBar() {
     }
   }
 
-  async function pick(p: MyPlaylist) {
-    if (useStore.getState().playlists.some((pl) => pl.ytPlaylistId === p.id)) {
-      setPicker(null)
-      return
-    }
-    setBusy(true)
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function importSelected() {
+    const ids = [...selected]
+    if (ids.length === 0) return
     setPicker(null)
-    try {
-      await importPlaylist(p.id, await currentAuth())
-    } catch (err) {
-      reportError(err)
-    } finally {
-      setBusy(false)
+    setBusy(true)
+    setImportProgress({ done: 0, total: ids.length })
+    const auth = await currentAuth()
+    const failures: string[] = []
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await importPlaylist(ids[i], auth)
+      } catch {
+        failures.push(ids[i])
+      }
+      setImportProgress({ done: i + 1, total: ids.length })
     }
+    setImportProgress(null)
+    setSelected(new Set())
+    setBusy(false)
+    if (failures.length) setError(`${failures.length} playlist(s) could not be imported.`)
   }
 
   return (
@@ -152,7 +170,11 @@ export function AddBar() {
           disabled={pickerBusy || busy}
           className="mt-2 text-sm text-sky-400 hover:underline disabled:opacity-40"
         >
-          {pickerBusy ? 'Loading your playlists…' : 'Import from my channel'}
+          {importProgress
+            ? `Importing ${importProgress.done}/${importProgress.total}…`
+            : pickerBusy
+              ? 'Loading your playlists…'
+              : 'Import from my channel'}
         </button>
       )}
 
@@ -162,7 +184,7 @@ export function AddBar() {
         <div className="mt-2 rounded-xl border border-ink-700 bg-ink-850 p-2">
           <div className="mb-1 flex items-center justify-between px-1">
             <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Your playlists
+              Your playlists — select to import
             </span>
             <button onClick={() => setPicker(null)} className="text-xs text-zinc-400 hover:text-white">
               Close
@@ -171,27 +193,51 @@ export function AddBar() {
           {picker.length === 0 ? (
             <p className="px-1 py-2 text-sm text-zinc-500">No playlists on this account.</p>
           ) : (
-            <ul className="max-h-72 overflow-y-auto no-scrollbar">
-              {picker.map((p) => {
-                const already = useStore
-                  .getState()
-                  .playlists.some((pl) => pl.ytPlaylistId === p.id)
-                return (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => pick(p)}
-                      disabled={already}
-                      className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-ink-800 disabled:opacity-40"
-                    >
-                      <span className="truncate text-zinc-100">{p.title}</span>
-                      <span className="shrink-0 text-xs text-zinc-500">
-                        {already ? 'added' : `${p.itemCount} videos`}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <>
+              <ul className="max-h-72 overflow-y-auto no-scrollbar">
+                {picker.map((p) => {
+                  const already = useStore
+                    .getState()
+                    .playlists.some((pl) => pl.ytPlaylistId === p.id)
+                  const checked = selected.has(p.id)
+                  return (
+                    <li key={p.id}>
+                      <button
+                        onClick={() => toggleSelect(p.id)}
+                        disabled={already}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-ink-800 disabled:opacity-40"
+                      >
+                        <span
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                            checked ? 'border-sky-500 bg-sky-600 text-white' : 'border-ink-600'
+                          }`}
+                        >
+                          {checked && (
+                            <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={3}>
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-zinc-100">{p.title}</span>
+                        <span className="shrink-0 text-xs text-zinc-500">
+                          {already ? 'added' : `${p.itemCount} videos`}
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="mt-2 flex items-center justify-between border-t border-ink-700 px-1 pt-2">
+                <span className="text-xs text-zinc-500">{selected.size} selected</span>
+                <button
+                  onClick={importSelected}
+                  disabled={selected.size === 0}
+                  className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+                >
+                  Import {selected.size > 0 ? selected.size : ''}
+                </button>
+              </div>
+            </>
           )}
         </div>
       )}

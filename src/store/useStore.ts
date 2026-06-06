@@ -15,15 +15,19 @@ interface StoreState {
   videos: Record<string, Video>
   progress: Record<string, Progress>
 
-  /** OAuth client id (persisted). The access token is in-memory only (not persisted). */
+  /** OAuth client id fallback (persisted). The access token is in-memory only (not persisted). */
   oauthClientId: string
   accessToken: AccessToken | null
+  /** Remembers that the user has signed in, so we can silently restore the session and skip
+   *  the onboarding gate after a reload (the token itself is not persisted). */
+  hasSignedIn: boolean
   /** cached transcripts keyed by videoId */
   transcripts: Record<string, TranscriptResult>
 
   setApiKey: (key: string) => void
   setOAuthClientId: (id: string) => void
   setAccessToken: (token: AccessToken | null) => void
+  setHasSignedIn: (value: boolean) => void
   cacheTranscript: (videoId: string, result: TranscriptResult) => void
 
   /** merge a batch of fetched videos into the cache */
@@ -53,11 +57,13 @@ export const useStore = create<StoreState>()(
       progress: {},
       oauthClientId: '',
       accessToken: null,
+      hasSignedIn: false,
       transcripts: {},
 
       setApiKey: (key) => set({ apiKey: key.trim() }),
       setOAuthClientId: (id) => set({ oauthClientId: id.trim() }),
       setAccessToken: (token) => set({ accessToken: token }),
+      setHasSignedIn: (value) => set({ hasSignedIn: value }),
       cacheTranscript: (videoId, result) =>
         set((s) => ({ transcripts: { ...s.transcripts, [videoId]: result } })),
 

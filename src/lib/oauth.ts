@@ -1,10 +1,21 @@
 import { useStore } from '../store/useStore'
+import { EMBEDDED_CLIENT_ID } from './config'
 import type { AccessToken } from '../types'
 
 // Single scope that covers both captions.download and reading the signed-in
 // account's own private/unlisted playlists and videos.
 export const YT_SCOPE = 'https://www.googleapis.com/auth/youtube.force-ssl'
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
+
+/** The effective OAuth client id: the embedded build-time value, or the user's fallback. */
+export function getClientId(): string {
+  return EMBEDDED_CLIENT_ID || useStore.getState().oauthClientId
+}
+
+/** True when OAuth can be used at all (a client id is available from build or settings). */
+export function isOAuthConfigured(): boolean {
+  return Boolean(getClientId())
+}
 
 // --- Minimal typings for the Google Identity Services token client ---
 interface TokenResponse {
@@ -65,8 +76,8 @@ function loadGis(): Promise<GoogleOAuth2> {
  * stores it in the Zustand store.
  */
 export async function requestToken(prompt: '' | 'consent' = ''): Promise<AccessToken> {
-  const clientId = useStore.getState().oauthClientId
-  if (!clientId) throw new Error('Set an OAuth Client ID in Settings first.')
+  const clientId = getClientId()
+  if (!clientId) throw new Error('No OAuth Client ID configured.')
 
   const oauth2 = await loadGis()
   const token = await new Promise<AccessToken>((resolve, reject) => {
@@ -90,6 +101,7 @@ export async function requestToken(prompt: '' | 'consent' = ''): Promise<AccessT
   })
 
   useStore.getState().setAccessToken(token)
+  useStore.getState().setHasSignedIn(true)
   return token
 }
 
@@ -103,6 +115,7 @@ export function signOut(): void {
   const token = useStore.getState().accessToken
   if (token) window.google?.accounts?.oauth2?.revoke(token.value)
   useStore.getState().setAccessToken(null)
+  useStore.getState().setHasSignedIn(false)
 }
 
 /**

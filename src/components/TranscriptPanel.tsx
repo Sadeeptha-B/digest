@@ -3,6 +3,7 @@ import type { YouTubePlayer } from 'react-youtube'
 import { useStore } from '../store/useStore'
 import { getValidToken, signIn } from '../lib/oauth'
 import { getTranscript } from '../lib/transcript'
+import { parseCaptionFile } from '../lib/captions'
 import type { Video } from '../types'
 
 function fmt(sec: number): string {
@@ -28,7 +29,26 @@ export function TranscriptPanel({
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(-1)
+  const [fileError, setFileError] = useState<string | null>(null)
   const rowRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file later
+    if (!file) return
+    setFileError(null)
+    try {
+      const lines = parseCaptionFile(await file.text())
+      if (lines.length === 0) {
+        setFileError('No captions found in that file. Use a .vtt or .srt file.')
+        return
+      }
+      cacheTranscript(video.id, { status: 'ok', lines, source: 'manual', fetchedAt: Date.now() })
+    } catch {
+      setFileError('Could not read that file.')
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -92,13 +112,40 @@ export function TranscriptPanel({
     player.playVideo?.()
   }
 
+  // Hidden file input + button to import a .vtt/.srt transcript manually (e.g. exported from
+  // YouTube Studio). Works without OAuth and for private videos.
+  const uploader = (
+    <div className="mt-3">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".vtt,.srt,text/vtt,application/x-subrip"
+        className="hidden"
+        onChange={onFile}
+      />
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
+      >
+        Upload .srt / .vtt
+      </button>
+      <p className="mt-1 text-xs text-zinc-500">
+        Download a transcript from YouTube Studio → Subtitles, then import it here.
+      </p>
+      {fileError && <p className="mt-1 text-sm text-rose-400">{fileError}</p>}
+    </div>
+  )
+
   // --- Empty / gating states ---
   if (!oauthClientId) {
     return (
-      <p className="px-1 text-sm text-zinc-500">
-        Add an <span className="text-zinc-300">OAuth Client ID</span> in Settings, then sign in,
-        to load transcripts for your own videos.
-      </p>
+      <div className="px-1">
+        <p className="text-sm text-zinc-500">
+          Add an <span className="text-zinc-300">OAuth Client ID</span> in Settings, then sign in,
+          to load transcripts for your own videos — or import one manually:
+        </p>
+        {uploader}
+      </div>
     )
   }
 
@@ -113,8 +160,10 @@ export function TranscriptPanel({
           {loading ? 'Loading…' : 'Load transcript'}
         </button>
         <p className="mt-2 text-xs text-zinc-500">
-          Works for videos on your account. Uses ~250 quota units, then caches.
+          Works for videos on your account with an uploaded caption track. Auto-generated
+          captions can't be downloaded via the API — import a file instead.
         </p>
+        {uploader}
       </div>
     )
   }
@@ -130,6 +179,7 @@ export function TranscriptPanel({
         >
           {loading ? 'Retrying…' : 'Try again'}
         </button>
+        {uploader}
       </div>
     )
   }

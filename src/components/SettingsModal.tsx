@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { isSignedIn, signIn, signOut } from '../lib/oauth'
+import { EMBEDDED_CLIENT_ID } from '../lib/config'
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const apiKey = useStore((s) => s.apiKey)
@@ -13,13 +14,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [clientId, setClientId] = useState(oauthClientId)
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [showKey, setShowKey] = useState(false)
 
   const signedIn = isSignedIn() && Boolean(accessToken)
+  const clientIdEmbedded = Boolean(EMBEDDED_CLIENT_ID)
 
   async function handleSignIn() {
     setAuthError(null)
-    // Persist the client id first so requestToken can read it.
-    setOAuthClientId(clientId)
+    if (!clientIdEmbedded) setOAuthClientId(clientId) // persist fallback id before requesting
     setAuthBusy(true)
     try {
       await signIn()
@@ -41,34 +43,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       >
         <h2 className="text-base font-medium text-white">Settings</h2>
 
-        <label className="mt-4 block text-sm text-zinc-400">YouTube API key</label>
-        <input
-          type="password"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          placeholder="AIza…"
-          className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
-        />
-        <p className="mt-1.5 text-xs text-zinc-500">
-          Stored only in this browser. Restrict the key by HTTP referrer in Google Cloud.
-        </p>
-
-        <hr className="my-4 border-ink-700" />
-
-        <label className="block text-sm text-zinc-400">OAuth Client ID</label>
-        <p className="mb-1.5 mt-0.5 text-xs text-zinc-500">
-          Needed for transcripts and private playlists. Create a <em>Web application</em> OAuth
-          client in Google Cloud and add this origin to its authorized JavaScript origins.
-        </p>
-        <input
-          type="text"
-          value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
-          placeholder="…apps.googleusercontent.com"
-          className="w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
-        />
-
-        <div className="mt-2.5 flex items-center gap-2">
+        {/* --- Google account --- */}
+        <label className="mt-4 block text-sm text-zinc-400">Google account</label>
+        {!clientIdEmbedded && (
+          <input
+            type="text"
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            placeholder="OAuth Client ID …apps.googleusercontent.com"
+            className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+          />
+        )}
+        <div className="mt-2 flex items-center gap-2">
           {signedIn ? (
             <>
               <span className="flex items-center gap-1.5 text-sm text-emerald-400">
@@ -84,14 +70,46 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           ) : (
             <button
               onClick={handleSignIn}
-              disabled={authBusy || !clientId.trim()}
+              disabled={authBusy || (!clientIdEmbedded && !clientId.trim())}
               className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
             >
               {authBusy ? 'Signing in…' : 'Sign in with Google'}
             </button>
           )}
         </div>
-        {authError && <p className="mt-2 text-sm text-rose-400">{authError}</p>}
+        <p className="mt-1.5 text-xs text-zinc-500">
+          Unlocks private playlists and transcripts. No API key required when signed in.
+        </p>
+        {authError && <p className="mt-1 text-sm text-rose-400">{authError}</p>}
+
+        <hr className="my-4 border-ink-700" />
+
+        {/* --- API key (only relevant when not signed in) --- */}
+        {signedIn ? (
+          <p className="text-xs text-zinc-500">
+            A YouTube API key isn't needed while signed in.{' '}
+            <button onClick={() => setShowKey((v) => !v)} className="text-sky-400 hover:underline">
+              {showKey ? 'Hide' : 'Set one anyway'}
+            </button>
+          </p>
+        ) : (
+          <label className="block text-sm text-zinc-400">YouTube API key</label>
+        )}
+        {(!signedIn || showKey) && (
+          <>
+            <input
+              type="password"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder="AIza…"
+              className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+            />
+            <p className="mt-1.5 text-xs text-zinc-500">
+              For browsing public content without signing in. Restrict it by HTTP referrer in
+              Google Cloud.
+            </p>
+          </>
+        )}
 
         <div className="mt-5 flex justify-end gap-2">
           <button
@@ -103,7 +121,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           <button
             onClick={() => {
               setApiKey(key)
-              setOAuthClientId(clientId)
+              if (!clientIdEmbedded) setOAuthClientId(clientId)
               onClose()
             }}
             className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
