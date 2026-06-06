@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { YouTubePlayer } from 'react-youtube'
 import { useStore } from '../store/useStore'
-import { getValidToken, signIn } from '../lib/oauth'
+import { getValidToken, isOAuthConfigured, signIn } from '../lib/oauth'
 import { getTranscript } from '../lib/transcript'
 import { parseCaptionFile } from '../lib/captions'
 import type { Video } from '../types'
@@ -22,7 +22,6 @@ export function TranscriptPanel({
   video: Video
   playerRef: RefObject<YouTubePlayer | null>
 }) {
-  const oauthClientId = useStore((s) => s.oauthClientId)
   const result = useStore((s) => s.transcripts[video.id])
   const cacheTranscript = useStore((s) => s.cacheTranscript)
 
@@ -137,7 +136,7 @@ export function TranscriptPanel({
   )
 
   // --- Empty / gating states ---
-  if (!oauthClientId) {
+  if (!isOAuthConfigured()) {
     return (
       <div className="px-1">
         <p className="text-sm text-zinc-500">

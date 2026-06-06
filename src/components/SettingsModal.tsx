@@ -9,12 +9,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const oauthClientId = useStore((s) => s.oauthClientId)
   const setOAuthClientId = useStore((s) => s.setOAuthClientId)
   const accessToken = useStore((s) => s.accessToken)
+  const reset = useStore((s) => s.reset)
 
   const [key, setKey] = useState(apiKey)
   const [clientId, setClientId] = useState(oauthClientId)
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
 
   const signedIn = isSignedIn() && Boolean(accessToken)
   const clientIdEmbedded = Boolean(EMBEDDED_CLIENT_ID)
@@ -30,6 +32,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     } finally {
       setAuthBusy(false)
     }
+  }
+
+  function handleClearData() {
+    if (signedIn) signOut() // revoke the token before wiping everything
+    reset()
+    onClose()
   }
 
   return (
@@ -109,6 +117,39 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               Google Cloud.
             </p>
           </>
+        )}
+
+        <hr className="my-4 border-ink-700" />
+
+        {/* --- Clear data --- */}
+        <label className="block text-sm text-zinc-400">Clear data</label>
+        <p className="mt-1 text-xs text-zinc-500">
+          Removes all lists, videos, watch progress, cached transcripts, and credentials from this
+          browser, resetting the app to a fresh install.
+        </p>
+        {confirmClear ? (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-sm text-rose-400">This can't be undone.</span>
+            <button
+              onClick={handleClearData}
+              className="ml-auto rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-500"
+            >
+              Clear everything
+            </button>
+            <button
+              onClick={() => setConfirmClear(false)}
+              className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmClear(true)}
+            className="mt-2 rounded-lg border border-rose-900/60 px-3 py-1.5 text-sm text-rose-400 hover:bg-rose-950/40"
+          >
+            Clear all data
+          </button>
         )}
 
         <div className="mt-5 flex justify-end gap-2">
