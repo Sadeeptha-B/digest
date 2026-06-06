@@ -46,19 +46,26 @@ interface StoreState {
 
   /** next video id in a playlist after the given one, or null if at the end */
   getNextVideoId: (playlistId: string, currentVideoId: string) => string | null
+
+  /** wipe all persisted data back to a fresh-install state */
+  reset: () => void
+}
+
+const initialData = {
+  apiKey: '',
+  playlists: [] as Playlist[],
+  videos: {} as Record<string, Video>,
+  progress: {} as Record<string, Progress>,
+  oauthClientId: '',
+  accessToken: null as AccessToken | null,
+  hasSignedIn: false,
+  transcripts: {} as Record<string, TranscriptResult>,
 }
 
 export const useStore = create<StoreState>()(
   persist(
     (set, get) => ({
-      apiKey: '',
-      playlists: [],
-      videos: {},
-      progress: {},
-      oauthClientId: '',
-      accessToken: null,
-      hasSignedIn: false,
-      transcripts: {},
+      ...initialData,
 
       setApiKey: (key) => set({ apiKey: key.trim() }),
       setOAuthClientId: (id) => set({ oauthClientId: id.trim() }),
@@ -173,6 +180,8 @@ export const useStore = create<StoreState>()(
         if (idx < 0 || idx >= pl.videoIds.length - 1) return null
         return pl.videoIds[idx + 1]
       },
+
+      reset: () => set({ ...initialData }),
     }),
     {
       name: 'digest-store',
