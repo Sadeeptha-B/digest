@@ -30,33 +30,56 @@ Everything is stored locally in your browser. There is no backend and no sign-in
 
 ## Getting started
 
-### 1. Create a YouTube API key
+There are two ways in. **Signing in with Google is recommended** — it unlocks your private
+playlists and transcripts, and needs no API key. The API key is an optional fallback for
+browsing public content without signing in.
 
-1. Open the [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com)
-   and enable **YouTube Data API v3**.
-2. Under **Credentials**, create an **API key**.
-3. Restrict it by **HTTP referrer** to the sites you'll use it from, e.g.
-   `http://localhost:5174/*` and your GitHub Pages URL `https://<user>.github.io/*`.
+### 1. Configure Google sign-in (recommended)
 
-The key is stored only in your browser's local storage. Because it's referrer-restricted
-and read-only over public data, exposing it in the browser is acceptable for personal use.
+1. In the [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com),
+   enable **YouTube Data API v3**.
+2. Configure the **OAuth consent screen** (External), add the scope
+   `https://www.googleapis.com/auth/youtube.force-ssl`, and add your Google account as a
+   **Test user** (staying in *Testing* needs no Google verification for personal use).
+3. **Credentials → Create OAuth client ID → Web application.** Add your origins to
+   **Authorized JavaScript origins**: `http://localhost:5174` and your Pages URL
+   `https://<user>.github.io`.
+4. Put the client ID in a `.env` file (copy from [.env.example](.env.example)):
 
-### 2. Run locally
+   ```
+   VITE_GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
+   ```
+
+   The OAuth client ID is **public app metadata, not a secret** — it's restricted by the
+   authorized origins above. With it set, users just click **Sign in with Google**; no client
+   ID is pasted at runtime. (If you don't set the env var, the app falls back to a Client ID
+   field in Settings.)
+
+### 2. (Optional) API key for public-only, no-sign-in use
+
+Under **Credentials**, create an **API key** and restrict it by **HTTP referrer**
+(`http://localhost:5174/*`, `https://<user>.github.io/*`). Not needed when signed in.
+
+### 3. Run locally
 
 ```bash
 npm install
-npm run dev
+npm run dev      # http://localhost:5174
 ```
 
-Open the printed URL (default `http://localhost:5174`), paste your API key when prompted,
-then paste a playlist or video URL.
-
-### 3. Build
+### 4. Build
 
 ```bash
 npm run build     # type-checks and bundles to dist/
-npm run preview   # serve the production build locally
+npm run preview   # serve the production build locally (PWA active here)
+npm run icons     # regenerate app icons from scripts/generate-icons.mjs
 ```
+
+## Install as an app (PWA)
+
+Digest is a PWA: open the production build (`npm run preview`, or your deployed Pages URL)
+and use the browser's **Install** action to add it as a standalone app. The service worker
+caches the app shell for fast loads and offline UI.
 
 ## Tech stack
 
@@ -68,18 +91,24 @@ React Router (`HashRouter`), `react-youtube`, and `@dnd-kit` for drag-and-drop r
 This repo includes a workflow at [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
 that builds and deploys on every push to `main`.
 
-One-time setup: in the repository's **Settings → Pages**, set **Source** to
-**GitHub Actions**. After the next push to `main`, the site publishes to
-`https://<user>.github.io/<repo>/`.
+One-time setup:
+1. **Settings → Pages → Source = GitHub Actions.**
+2. **Settings → Secrets and variables → Actions → Variables → New variable:** add
+   `VITE_GOOGLE_CLIENT_ID` with your OAuth client ID. It's public app metadata (not a secret),
+   so a repository *variable* is appropriate. The workflow injects it at build time.
+
+After the next push to `main`, the site publishes to `https://<user>.github.io/digest/`.
 
 Notes:
-- Vite's `base` is set to `./` (relative), so the build works under any project path.
+- The Pages build sets `BASE_PATH=/digest/` (in the workflow), so assets and the PWA manifest
+  (`start_url`/`scope`) resolve under the project subpath. Local dev/preview stays at `/`.
 - The app uses `HashRouter`, so deep links and refreshes work on Pages without
   server-side rewrites.
-- Remember to add your Pages URL to the API key's referrer restrictions (step 1 above).
+- Add your Pages URL to the OAuth client's authorized origins (and, if used, the API key's
+  referrer restrictions).
 
 ## Scope / not included
 
-- **Private** playlists (would require Google OAuth sign-in).
-- A backend proxy to hide the API key (not needed for a referrer-restricted personal key).
+- A backend proxy / home server for transcripts of non-owned or auto-captioned videos
+  (see [docs/transcripts.md](docs/transcripts.md)).
 - Cross-device sync (state lives in each browser's local storage).

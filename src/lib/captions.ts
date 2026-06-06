@@ -82,9 +82,10 @@ function cleanText(raw: string): string {
 }
 
 /**
- * Parse WebVTT into transcript lines. Cues are separated by blank lines; the timing line
- * contains "-->". Consecutive identical lines (common in rolling ASR-style captions) are
- * de-duplicated.
+ * Parse WebVTT **or** SubRip (.srt) into transcript lines. Cues are separated by blank lines;
+ * the timing line contains "-->" (SRT uses a comma for milliseconds, which we normalise).
+ * Any leading SRT index line sits before the timing line and is ignored. Consecutive identical
+ * lines (common in rolling ASR-style captions) are de-duplicated.
  */
 export function parseVtt(vtt: string): TranscriptLine[] {
   const blocks = vtt.replace(/\r/g, '').split(/\n\n+/)
@@ -93,7 +94,7 @@ export function parseVtt(vtt: string): TranscriptLine[] {
     const rows = block.split('\n').filter(Boolean)
     const timingIdx = rows.findIndex((r) => r.includes('-->'))
     if (timingIdx === -1) continue
-    const start = rows[timingIdx].split('-->')[0]
+    const start = rows[timingIdx].split('-->')[0].trim().replace(',', '.')
     const text = cleanText(rows.slice(timingIdx + 1).join(' '))
     if (!text) continue
     const startSec = timestampToSeconds(start)
@@ -101,4 +102,9 @@ export function parseVtt(vtt: string): TranscriptLine[] {
     lines.push({ startSec, text })
   }
   return lines
+}
+
+/** Parse an uploaded caption file (.vtt or .srt) into transcript lines. */
+export function parseCaptionFile(text: string): TranscriptLine[] {
+  return parseVtt(text)
 }

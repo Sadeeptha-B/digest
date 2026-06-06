@@ -34,6 +34,12 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          # Serve under https://<user>.github.io/digest/
+          BASE_PATH: /digest/
+          # Public app metadata (not a secret) — set as a repository *variable*:
+          # Settings → Secrets and variables → Actions → Variables → New variable.
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
