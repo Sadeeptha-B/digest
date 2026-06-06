@@ -154,7 +154,7 @@ export function TranscriptPanel({
         <button
           onClick={load}
           disabled={loading}
-          className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+          className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
         >
           {loading ? 'Loading…' : 'Load transcript'}
         </button>
@@ -190,7 +190,7 @@ export function TranscriptPanel({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search transcript…"
-        className="mb-2 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-white outline-none focus:border-sky-500"
+        className="mb-2 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-white outline-none focus:border-accent-500"
       />
       <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
         {filtered.length === 0 ? (
@@ -208,10 +208,10 @@ export function TranscriptPanel({
                     }}
                     onClick={() => seek(l.startSec)}
                     className={`flex w-full gap-2.5 rounded-md px-2 py-1 text-left text-sm ${
-                      isActive ? 'bg-sky-600/15 text-white ring-1 ring-sky-600/40' : 'hover:bg-ink-800'
+                      isActive ? 'bg-accent-600/15 text-white ring-1 ring-accent-600/40' : 'hover:bg-ink-800'
                     }`}
                   >
-                    <span className="shrink-0 font-mono text-xs text-sky-400">{fmt(l.startSec)}</span>
+                    <span className="shrink-0 font-mono text-xs text-accent-400">{fmt(l.startSec)}</span>
                     <span className="text-zinc-300">{l.text}</span>
                   </button>
                 </li>

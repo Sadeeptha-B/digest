@@ -81,7 +81,7 @@ export function Watch() {
     return (
       <div className="text-center text-sm text-zinc-500">
         Video not loaded.{' '}
-        <Link to="/" className="text-sky-400 hover:underline">
+        <Link to="/" className="text-accent-400 hover:underline">
           Back to library
         </Link>
       </div>
@@ -143,7 +143,7 @@ export function Watch() {
           {hasNext && (
             <button
               onClick={goToNext}
-              className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500"
+              className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500"
             >
               Next ›
             </button>
@@ -191,7 +191,7 @@ function TabButton({
       onClick={onClick}
       className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium ${
         active
-          ? 'border-sky-500 text-white'
+          ? 'border-accent-500 text-white'
           : 'border-transparent text-zinc-400 hover:text-zinc-200'
       }`}
     >

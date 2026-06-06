@@ -59,14 +59,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
             placeholder="OAuth Client ID …apps.googleusercontent.com"
-            className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+            className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
           />
         )}
         <div className="mt-2 flex items-center gap-2">
           {signedIn ? (
             <>
-              <span className="flex items-center gap-1.5 text-sm text-emerald-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" /> Signed in
+              <span className="flex items-center gap-1.5 text-sm text-accent-400">
+                <span className="h-2 w-2 rounded-full bg-accent-400" /> Signed in
               </span>
               <button
                 onClick={() => signOut()}
@@ -79,7 +79,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <button
               onClick={handleSignIn}
               disabled={authBusy || (!clientIdEmbedded && !clientId.trim())}
-              className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+              className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
             >
               {authBusy ? 'Signing in…' : 'Sign in with Google'}
             </button>
@@ -96,7 +96,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         {signedIn ? (
           <p className="text-xs text-zinc-500">
             A YouTube API key isn't needed while signed in.{' '}
-            <button onClick={() => setShowKey((v) => !v)} className="text-sky-400 hover:underline">
+            <button onClick={() => setShowKey((v) => !v)} className="text-accent-400 hover:underline">
               {showKey ? 'Hide' : 'Set one anyway'}
             </button>
           </p>
@@ -110,7 +110,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               value={key}
               onChange={(e) => setKey(e.target.value)}
               placeholder="AIza…"
-              className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+              className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
             />
             <p className="mt-1.5 text-xs text-zinc-500">
               For browsing public content without signing in. Restrict it by HTTP referrer in
@@ -165,7 +165,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               if (!clientIdEmbedded) setOAuthClientId(clientId)
               onClose()
             }}
-            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
+            className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500"
           >
             Save
           </button>

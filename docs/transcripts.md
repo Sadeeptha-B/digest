@@ -161,6 +161,16 @@ YouTube videos/articles into cards), **not** Recall.ai the meeting-bot API.
   - **Key sensitivity:** the `sk_` key grants read access to your **entire** knowledge base
     — fine for **local** use, but **do not ship it in the deployed build**. Prefer a home
     server `/recall?videoId=` proxy that hides the key and sidesteps any **CORS** limits.
+    - **Why not just encrypt it in `localStorage`?** Encryption only protects the key
+      *at rest* (extension dumping storage, profile files copied off disk). It can't
+      protect it *at runtime*: the app must decrypt the key in the browser to use it, so
+      anything running in your origin — chiefly **XSS** — sees the plaintext regardless.
+      The encryption is only meaningful if the unlock secret is a **user passphrase that's
+      never persisted** (otherwise the JS can auto-decrypt, and so can an attacker). Note
+      the blast radius is your *whole* knowledge base, not one video. So: local use,
+      encryption is optional polish; deployed build, use the proxy so the key never reaches
+      the browser at all. If you must go client-side, gate it behind a passphrase and ship
+      a strict **CSP**.
   - **Coverage:** only videos you've actually saved to Recall have cards.
   - **Not a transcript:** treat as the **summary/notes** source; pair with Options 5/6 for
     full transcripts.
