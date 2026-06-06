@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
-import { isOAuthConfigured, signIn } from '../lib/oauth'
+import { isOAuthConfigured } from '../lib/oauth'
+import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
 
 /**
  * First-run onboarding. Two ways in:
@@ -12,22 +13,9 @@ export function ApiKeyGate() {
     const setApiKey = useStore((s) => s.setApiKey)
     const [showKey, setShowKey] = useState(false)
     const [key, setKey] = useState('')
-    const [busy, setBusy] = useState(false)
-    const [error, setError] = useState<string | null>(null)
+    const { busy, error, start: handleSignIn } = useGoogleSignIn()
 
     const oauth = isOAuthConfigured()
-
-    async function handleSignIn() {
-        setError(null)
-        setBusy(true)
-        try {
-            await signIn()
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'Sign-in failed.')
-        } finally {
-            setBusy(false)
-        }
-    }
 
     return (
         <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center px-6 py-16">
@@ -39,8 +27,8 @@ export function ApiKeyGate() {
                     <>
                         <h2 className="text-base font-medium text-white">Sign in to get started</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                            Connect your Google account to access your playlists and
-                            transcripts. No API key needed.
+                            Connect your Google account to access your playlists and transcripts. No API key
+                            needed.
                         </p>
                         <button
                             onClick={handleSignIn}
@@ -52,7 +40,7 @@ export function ApiKeyGate() {
                         {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
 
                         <button
-                            onClick={() => setShowKey((v) => !v)}
+                            onClick={() => setShowKey((value) => !value)}
                             className="mt-4 block text-sm text-accent-400 hover:underline"
                         >
                             {showKey ? 'Hide' : 'Or use a public API key instead'}
@@ -96,8 +84,8 @@ export function ApiKeyGate() {
                                 → <span className="text-zinc-200">Create credentials → API key</span>.
                             </li>
                             <li>
-                                Restrict the key by <span className="text-zinc-200">HTTP referrer</span> (this app's
-                                URL) and paste it below.
+                                Restrict the key by <span className="text-zinc-200">HTTP referrer</span> (this
+                                app's URL) and paste it below.
                             </li>
                         </ol>
 

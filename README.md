@@ -5,7 +5,9 @@ video) URL, and watch it in a stripped-down player surrounded only by **your own
 queue — no sidebar recommendations, no autoplay to unrelated content, no end-screen
 grid of "related" videos.
 
-Everything is stored locally in your browser. There is no backend and no sign-in.
+Everything is stored locally in your browser — there is no backend. Sign in with Google
+(optional) to reach your private playlists and transcripts; otherwise a public API key is
+enough for public/unlisted content.
 
 ## Features
 
@@ -110,5 +112,5 @@ Notes:
 ## Scope / not included
 
 - A backend proxy / home server for transcripts of non-owned or auto-captioned videos
-  (see [docs/transcripts.md](docs/transcripts.md)).
+  (see [docs/roadmap/transcripts.md](docs/roadmap/transcripts.md)).
 - Cross-device sync (state lives in each browser's local storage).

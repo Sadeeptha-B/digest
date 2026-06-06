@@ -151,7 +151,7 @@ export function Watch() {
         </div>
       </div>
 
-      <aside className="flex flex-col lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
+      <aside className="flex flex-col rounded-xl border border-ink-700 bg-ink-900/40 p-3 lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
         <div className="mb-2 flex gap-1 border-b border-ink-800">
           {playlist && (
             <TabButton active={tab === 'queue'} onClick={() => setTab('queue')}>

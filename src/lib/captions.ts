@@ -1,7 +1,5 @@
 import type { TranscriptLine } from '../types'
-import { YouTubeApiError } from './youtube'
-
-const API_BASE = 'https://www.googleapis.com/youtube/v3'
+import { API_BASE, apiErrorFromResponse } from './youtube'
 
 interface CaptionTrack {
   id: string
@@ -17,25 +15,16 @@ interface CaptionsListResponse {
   }>
 }
 
-async function authedText(url: string, token: string): Promise<Response> {
+async function authedFetch(url: string, token: string): Promise<Response> {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`
-    try {
-      const body = await res.json()
-      if (body?.error?.message) detail = body.error.message
-    } catch {
-      /* non-JSON body */
-    }
-    throw new YouTubeApiError(detail, res.status)
-  }
+  if (!res.ok) throw await apiErrorFromResponse(res)
   return res
 }
 
 /** captions.list — 50 quota units. Lists caption tracks for a video the user can edit. */
 export async function listCaptionTracks(videoId: string, token: string): Promise<CaptionTrack[]> {
   const qs = new URLSearchParams({ part: 'snippet', videoId })
-  const res = await authedText(`${API_BASE}/captions?${qs}`, token)
+  const res = await authedFetch(`${API_BASE}/captions?${qs}`, token)
   const data = (await res.json()) as CaptionsListResponse
   return (data.items ?? []).map((i) => ({
     id: i.id,
@@ -61,7 +50,7 @@ export function pickTrack(tracks: CaptionTrack[]): CaptionTrack | null {
 /** captions.download — 200 quota units. Returns the raw caption file (WebVTT). */
 export async function downloadCaption(captionId: string, token: string): Promise<string> {
   const qs = new URLSearchParams({ tfmt: 'vtt' })
-  const res = await authedText(`${API_BASE}/captions/${captionId}?${qs}`, token)
+  const res = await authedFetch(`${API_BASE}/captions/${captionId}?${qs}`, token)
   return res.text()
 }
 

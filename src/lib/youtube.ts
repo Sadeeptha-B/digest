@@ -1,6 +1,6 @@
 import type { Video } from '../types'
 
-const API_BASE = 'https://www.googleapis.com/youtube/v3'
+export const API_BASE = 'https://www.googleapis.com/youtube/v3'
 
 /** Credentials for a Data API call. With a token, the signed-in account's private content resolves. */
 export interface Auth {
@@ -15,6 +15,18 @@ export class YouTubeApiError extends Error {
     this.name = 'YouTubeApiError'
     this.status = status
   }
+}
+
+/** Build a YouTubeApiError from a failed Response, preferring the API's JSON error message. */
+export async function apiErrorFromResponse(res: Response): Promise<YouTubeApiError> {
+  let detail = `${res.status} ${res.statusText}`
+  try {
+    const body = await res.json()
+    if (body?.error?.message) detail = body.error.message
+  } catch {
+    /* non-JSON / empty body — keep the status line */
+  }
+  return new YouTubeApiError(detail, res.status)
 }
 
 interface Thumbnails {
@@ -38,16 +50,7 @@ async function call<T>(path: string, params: Record<string, string>, auth: Auth)
   const headers: Record<string, string> = {}
   if (auth.token) headers.Authorization = `Bearer ${auth.token}`
   const res = await fetch(`${API_BASE}/${path}?${qs.toString()}`, { headers })
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`
-    try {
-      const body = await res.json()
-      if (body?.error?.message) detail = body.error.message
-    } catch {
-      /* ignore parse errors */
-    }
-    throw new YouTubeApiError(detail, res.status)
-  }
+  if (!res.ok) throw await apiErrorFromResponse(res)
   return res.json() as Promise<T>
 }
 
