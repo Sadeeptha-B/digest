@@ -14,7 +14,7 @@ const SILENT_TOKEN_ERROR_CODES = new Set([
 ])
 
 /** The effective OAuth client id: the embedded build-time value, or the user's fallback. */
-export function getClientId(): string {
+function getClientId(): string {
     return EMBEDDED_CLIENT_ID || useStore.getState().oauthClientId
 }
 
@@ -143,13 +143,11 @@ export function signOut(): void {
  */
 export async function getValidToken(): Promise<AccessToken | null> {
     const current = useStore.getState().accessToken
-    if (current && current.expiresAt > Date.now()) return current
+    if (tokenIsValid(current)) return current
     try {
         return await requestToken('')
     } catch (error) {
-        if (error instanceof OAuthError && SILENT_TOKEN_ERROR_CODES.has(error.code)) {
-            return null
-        }
+        if (isConsentRequired(error)) return null
         throw error
     }
 }
