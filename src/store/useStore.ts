@@ -1,0 +1,153 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import { SAVED_VIDEOS_ID, type Playlist, type Progress, type Video } from '../types'
+
+interface StoreState {
+  apiKey: string
+  playlists: Playlist[]
+  videos: Record<string, Video>
+  progress: Record<string, Progress>
+
+  setApiKey: (key: string) => void
+
+  /** merge a batch of fetched videos into the cache */
+  upsertVideos: (videos: Video[]) => void
+  addPlaylist: (playlist: Playlist) => void
+  removePlaylist: (playlistId: string) => void
+  /** append a single standalone video into the reserved "Saved videos" list */
+  addStandaloneVideo: (video: Video) => void
+
+  reorderPlaylists: (orderedIds: string[]) => void
+  reorderVideos: (playlistId: string, orderedVideoIds: string[]) => void
+  removeVideoFromPlaylist: (playlistId: string, videoId: string) => void
+
+  setWatched: (videoId: string, watched: boolean) => void
+  setPosition: (videoId: string, positionSec: number) => void
+
+  /** next video id in a playlist after the given one, or null if at the end */
+  getNextVideoId: (playlistId: string, currentVideoId: string) => string | null
+}
+
+export const useStore = create<StoreState>()(
+  persist(
+    (set, get) => ({
+      apiKey: '',
+      playlists: [],
+      videos: {},
+      progress: {},
+
+      setApiKey: (key) => set({ apiKey: key.trim() }),
+
+      upsertVideos: (incoming) =>
+        set((s) => {
+          const videos = { ...s.videos }
+          for (const v of incoming) videos[v.id] = v
+          return { videos }
+        }),
+
+      addPlaylist: (playlist) =>
+        set((s) => {
+          // replace if a playlist with the same YouTube id already exists
+          const existingIdx = s.playlists.findIndex(
+            (p) => p.ytPlaylistId && p.ytPlaylistId === playlist.ytPlaylistId,
+          )
+          const playlists = [...s.playlists]
+          if (existingIdx >= 0) playlists[existingIdx] = playlist
+          else playlists.push(playlist)
+          return { playlists }
+        }),
+
+      removePlaylist: (playlistId) =>
+        set((s) => ({ playlists: s.playlists.filter((p) => p.id !== playlistId) })),
+
+      addStandaloneVideo: (video) =>
+        set((s) => {
+          const videos = { ...s.videos, [video.id]: video }
+          const playlists = [...s.playlists]
+          let saved = playlists.find((p) => p.id === SAVED_VIDEOS_ID)
+          if (!saved) {
+            saved = {
+              id: SAVED_VIDEOS_ID,
+              ytPlaylistId: null,
+              title: 'Saved videos',
+              channelTitle: '',
+              videoIds: [],
+              addedAt: Date.now(),
+            }
+            playlists.unshift(saved)
+          }
+          if (!saved.videoIds.includes(video.id)) {
+            saved.videoIds = [...saved.videoIds, video.id]
+          }
+          return { videos, playlists }
+        }),
+
+      reorderPlaylists: (orderedIds) =>
+        set((s) => {
+          const byId = new Map(s.playlists.map((p) => [p.id, p]))
+          const playlists = orderedIds
+            .map((id) => byId.get(id))
+            .filter((p): p is Playlist => Boolean(p))
+          return { playlists }
+        }),
+
+      reorderVideos: (playlistId, orderedVideoIds) =>
+        set((s) => ({
+          playlists: s.playlists.map((p) =>
+            p.id === playlistId ? { ...p, videoIds: orderedVideoIds } : p,
+          ),
+        })),
+
+      removeVideoFromPlaylist: (playlistId, videoId) =>
+        set((s) => ({
+          playlists: s.playlists.map((p) =>
+            p.id === playlistId
+              ? { ...p, videoIds: p.videoIds.filter((id) => id !== videoId) }
+              : p,
+          ),
+        })),
+
+      setWatched: (videoId, watched) =>
+        set((s) => {
+          const prev = s.progress[videoId]
+          return {
+            progress: {
+              ...s.progress,
+              [videoId]: {
+                watched,
+                lastPositionSec: prev?.lastPositionSec ?? 0,
+                updatedAt: Date.now(),
+              },
+            },
+          }
+        }),
+
+      setPosition: (videoId, positionSec) =>
+        set((s) => {
+          const prev = s.progress[videoId]
+          return {
+            progress: {
+              ...s.progress,
+              [videoId]: {
+                watched: prev?.watched ?? false,
+                lastPositionSec: positionSec,
+                updatedAt: Date.now(),
+              },
+            },
+          }
+        }),
+
+      getNextVideoId: (playlistId, currentVideoId) => {
+        const pl = get().playlists.find((p) => p.id === playlistId)
+        if (!pl) return null
+        const idx = pl.videoIds.indexOf(currentVideoId)
+        if (idx < 0 || idx >= pl.videoIds.length - 1) return null
+        return pl.videoIds[idx + 1]
+      },
+    }),
+    {
+      name: 'digest-store',
+      version: 1,
+    },
+  ),
+)
