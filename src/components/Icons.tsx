@@ -42,3 +42,9 @@ export const BackIcon = ({ className = 'h-4 w-4' }: P) => (
     <path d="M19 12H5M12 19l-7-7 7-7" />
   </svg>
 )
+
+export const CloseIcon = ({ className = 'h-4 w-4' }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M18 6 6 18M6 6l12 12" />
+  </svg>
+)

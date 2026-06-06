@@ -133,22 +133,26 @@ export const useStore = create<StoreState>()(
             addStandaloneVideo: (video) =>
                 set((s) => {
                     const videos = { ...s.videos, [video.id]: video }
-                    const playlists = [...s.playlists]
-                    let saved = playlists.find((p) => p.id === SAVED_VIDEOS_ID)
-                    if (!saved) {
-                        saved = {
+                    const existing = s.playlists.find((p) => p.id === SAVED_VIDEOS_ID)
+                    if (!existing) {
+                        const saved: Playlist = {
                             id: SAVED_VIDEOS_ID,
                             ytPlaylistId: null,
                             title: 'Saved videos',
                             channelTitle: '',
-                            videoIds: [],
+                            videoIds: [video.id],
                             addedAt: Date.now(),
                         }
-                        playlists.unshift(saved)
+                        return { videos, playlists: [saved, ...s.playlists] }
                     }
-                    if (!saved.videoIds.includes(video.id)) {
-                        saved.videoIds = [...saved.videoIds, video.id]
-                    }
+                    // Immutably append (skip if already present) so subscribers re-render.
+                    const playlists = existing.videoIds.includes(video.id)
+                        ? s.playlists
+                        : s.playlists.map((p) =>
+                              p.id === SAVED_VIDEOS_ID
+                                  ? { ...p, videoIds: [...p.videoIds, video.id] }
+                                  : p,
+                          )
                     return { videos, playlists }
                 }),
 
