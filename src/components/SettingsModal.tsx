@@ -1,10 +1,34 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
+import { isSignedIn, signIn, signOut } from '../lib/oauth'
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const apiKey = useStore((s) => s.apiKey)
   const setApiKey = useStore((s) => s.setApiKey)
-  const [value, setValue] = useState(apiKey)
+  const oauthClientId = useStore((s) => s.oauthClientId)
+  const setOAuthClientId = useStore((s) => s.setOAuthClientId)
+  const accessToken = useStore((s) => s.accessToken)
+
+  const [key, setKey] = useState(apiKey)
+  const [clientId, setClientId] = useState(oauthClientId)
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
+
+  const signedIn = isSignedIn() && Boolean(accessToken)
+
+  async function handleSignIn() {
+    setAuthError(null)
+    // Persist the client id first so requestToken can read it.
+    setOAuthClientId(clientId)
+    setAuthBusy(true)
+    try {
+      await signIn()
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : 'Sign-in failed.')
+    } finally {
+      setAuthBusy(false)
+    }
+  }
 
   return (
     <div
@@ -20,25 +44,66 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <label className="mt-4 block text-sm text-zinc-400">YouTube API key</label>
         <input
           type="password"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
           placeholder="AIza…"
           className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
         />
-        <p className="mt-2 text-xs text-zinc-500">
+        <p className="mt-1.5 text-xs text-zinc-500">
           Stored only in this browser. Restrict the key by HTTP referrer in Google Cloud.
         </p>
+
+        <hr className="my-4 border-ink-700" />
+
+        <label className="block text-sm text-zinc-400">OAuth Client ID</label>
+        <p className="mb-1.5 mt-0.5 text-xs text-zinc-500">
+          Needed for transcripts and private playlists. Create a <em>Web application</em> OAuth
+          client in Google Cloud and add this origin to its authorized JavaScript origins.
+        </p>
+        <input
+          type="text"
+          value={clientId}
+          onChange={(e) => setClientId(e.target.value)}
+          placeholder="…apps.googleusercontent.com"
+          className="w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+        />
+
+        <div className="mt-2.5 flex items-center gap-2">
+          {signedIn ? (
+            <>
+              <span className="flex items-center gap-1.5 text-sm text-emerald-400">
+                <span className="h-2 w-2 rounded-full bg-emerald-400" /> Signed in
+              </span>
+              <button
+                onClick={() => signOut()}
+                className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleSignIn}
+              disabled={authBusy || !clientId.trim()}
+              className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+            >
+              {authBusy ? 'Signing in…' : 'Sign in with Google'}
+            </button>
+          )}
+        </div>
+        {authError && <p className="mt-2 text-sm text-rose-400">{authError}</p>}
 
         <div className="mt-5 flex justify-end gap-2">
           <button
             onClick={onClose}
             className="rounded-lg border border-ink-700 px-4 py-2 text-sm text-zinc-300 hover:bg-ink-800"
           >
-            Cancel
+            Close
           </button>
           <button
             onClick={() => {
-              setApiKey(value)
+              setApiKey(key)
+              setOAuthClientId(clientId)
               onClose()
             }}
             className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"

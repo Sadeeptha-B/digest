@@ -2,6 +2,12 @@ import type { Video } from '../types'
 
 const API_BASE = 'https://www.googleapis.com/youtube/v3'
 
+/** Credentials for a Data API call. With a token, the signed-in account's private content resolves. */
+export interface Auth {
+  apiKey: string
+  token?: string | null
+}
+
 export class YouTubeApiError extends Error {
   status: number
   constructor(message: string, status: number) {
@@ -26,9 +32,12 @@ function pickThumb(thumbs: Thumbnails | undefined): string {
   )
 }
 
-async function call<T>(path: string, params: Record<string, string>, apiKey: string): Promise<T> {
-  const qs = new URLSearchParams({ ...params, key: apiKey })
-  const res = await fetch(`${API_BASE}/${path}?${qs.toString()}`)
+async function call<T>(path: string, params: Record<string, string>, auth: Auth): Promise<T> {
+  const qs = new URLSearchParams({ ...params })
+  if (auth.apiKey) qs.set('key', auth.apiKey)
+  const headers: Record<string, string> = {}
+  if (auth.token) headers.Authorization = `Bearer ${auth.token}`
+  const res = await fetch(`${API_BASE}/${path}?${qs.toString()}`, { headers })
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`
     try {
@@ -43,22 +52,65 @@ async function call<T>(path: string, params: Record<string, string>, apiKey: str
 }
 
 interface PlaylistsListResponse {
-  items: Array<{ snippet: { title: string; channelTitle: string } }>
+  nextPageToken?: string
+  items: Array<{
+    id: string
+    snippet: { title: string; channelTitle: string }
+    contentDetails?: { itemCount: number }
+  }>
 }
 
 /** playlists.list — 1 quota unit. Returns title/channel for the playlist. */
 export async function fetchPlaylistMeta(
   playlistId: string,
-  apiKey: string,
+  auth: Auth,
 ): Promise<{ title: string; channelTitle: string }> {
   const data = await call<PlaylistsListResponse>(
     'playlists',
     { part: 'snippet', id: playlistId, maxResults: '1' },
-    apiKey,
+    auth,
   )
   const item = data.items?.[0]
-  if (!item) throw new YouTubeApiError('Playlist not found or is private.', 404)
+  if (!item) {
+    throw new YouTubeApiError(
+      auth.token ? 'Playlist not found.' : 'Playlist not found or is private (sign in to access your own).',
+      404,
+    )
+  }
   return { title: item.snippet.title, channelTitle: item.snippet.channelTitle }
+}
+
+export interface MyPlaylist {
+  id: string
+  title: string
+  itemCount: number
+}
+
+/**
+ * playlists.list?mine=true, paginated — 1 unit/page. Lists ALL of the signed-in account's
+ * playlists, including private ones. Requires a token.
+ */
+export async function listMyPlaylists(auth: Auth): Promise<MyPlaylist[]> {
+  const out: MyPlaylist[] = []
+  let pageToken: string | undefined
+  do {
+    const params: Record<string, string> = {
+      part: 'snippet,contentDetails',
+      mine: 'true',
+      maxResults: '50',
+    }
+    if (pageToken) params.pageToken = pageToken
+    const data = await call<PlaylistsListResponse>('playlists', params, auth)
+    for (const item of data.items ?? []) {
+      out.push({
+        id: item.id,
+        title: item.snippet.title,
+        itemCount: item.contentDetails?.itemCount ?? 0,
+      })
+    }
+    pageToken = data.nextPageToken
+  } while (pageToken)
+  return out
 }
 
 interface PlaylistItemsResponse {
@@ -79,7 +131,7 @@ const UNAVAILABLE_TITLES = new Set(['Deleted video', 'Private video'])
  * playlistItems.list, paginated — 1 quota unit per page (50 items each).
  * Returns the videos in playlist order. Deleted/private items are kept but flagged.
  */
-export async function fetchAllPlaylistItems(playlistId: string, apiKey: string): Promise<Video[]> {
+export async function fetchAllPlaylistItems(playlistId: string, auth: Auth): Promise<Video[]> {
   const videos: Video[] = []
   let pageToken: string | undefined
   do {
@@ -89,7 +141,7 @@ export async function fetchAllPlaylistItems(playlistId: string, apiKey: string):
       maxResults: '50',
     }
     if (pageToken) params.pageToken = pageToken
-    const data = await call<PlaylistItemsResponse>('playlistItems', params, apiKey)
+    const data = await call<PlaylistItemsResponse>('playlistItems', params, auth)
     for (const item of data.items ?? []) {
       const s = item.snippet
       const id = s.resourceId?.videoId
@@ -113,14 +165,19 @@ interface VideosListResponse {
 }
 
 /** videos.list — 1 quota unit. Fetch a single standalone video's metadata. */
-export async function fetchVideo(videoId: string, apiKey: string): Promise<Video> {
+export async function fetchVideo(videoId: string, auth: Auth): Promise<Video> {
   const data = await call<VideosListResponse>(
     'videos',
     { part: 'snippet', id: videoId, maxResults: '1' },
-    apiKey,
+    auth,
   )
   const item = data.items?.[0]
-  if (!item) throw new YouTubeApiError('Video not found or is unavailable.', 404)
+  if (!item) {
+    throw new YouTubeApiError(
+      auth.token ? 'Video not found.' : 'Video not found or is private (sign in to access your own).',
+      404,
+    )
+  }
   return {
     id: item.id,
     title: item.snippet.title,

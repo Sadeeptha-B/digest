@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import YouTube, { type YouTubeEvent, type YouTubePlayer } from 'react-youtube'
 import { useStore } from '../store/useStore'
 import { Queue } from '../components/Queue'
+import { TranscriptPanel } from '../components/TranscriptPanel'
 import { BackIcon } from '../components/Icons'
+
+type Tab = 'queue' | 'transcript'
 
 // YT.PlayerState
 const ENDED = 0
@@ -17,6 +20,7 @@ export function Watch() {
 
   const playlist = useStore((s) => s.playlists.find((p) => p.id === listId))
   const video = useStore((s) => s.videos[videoId])
+  const [tab, setTab] = useState<Tab>('queue')
   const setWatched = useStore((s) => s.setWatched)
   const setPosition = useStore((s) => s.setPosition)
   const getNextVideoId = useStore((s) => s.getNextVideoId)
@@ -117,6 +121,8 @@ export function Watch() {
                 autoplay: 1,
                 modestbranding: 1,
                 playsinline: 1,
+                cc_load_policy: 1,
+                cc_lang_pref: 'en',
               },
             }}
             onReady={onReady}
@@ -145,14 +151,51 @@ export function Watch() {
         </div>
       </div>
 
-      {playlist && (
-        <aside className="lg:max-h-[calc(100vh-7rem)] lg:sticky lg:top-20">
-          <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Up next
-          </h2>
-          <Queue videoIds={playlist.videoIds} currentVideoId={videoId} listId={playlist.id} />
-        </aside>
-      )}
+      <aside className="flex flex-col lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
+        <div className="mb-2 flex gap-1 border-b border-ink-800">
+          {playlist && (
+            <TabButton active={tab === 'queue'} onClick={() => setTab('queue')}>
+              Up next
+            </TabButton>
+          )}
+          <TabButton active={tab === 'transcript' || !playlist} onClick={() => setTab('transcript')}>
+            Transcript
+          </TabButton>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {tab === 'queue' && playlist ? (
+            <div className="h-full overflow-y-auto no-scrollbar">
+              <Queue videoIds={playlist.videoIds} currentVideoId={videoId} listId={playlist.id} />
+            </div>
+          ) : (
+            <TranscriptPanel video={video} playerRef={playerRef} />
+          )}
+        </div>
+      </aside>
     </div>
+  )
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium ${
+        active
+          ? 'border-sky-500 text-white'
+          : 'border-transparent text-zinc-400 hover:text-zinc-200'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
