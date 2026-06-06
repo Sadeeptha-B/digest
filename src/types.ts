@@ -27,4 +27,19 @@ export interface Progress {
   updatedAt: number
 }
 
+export interface TranscriptLine {
+  startSec: number
+  text: string
+}
+
+export type TranscriptResult =
+  | { status: 'ok'; lines: TranscriptLine[]; source: 'official' | 'proxy'; fetchedAt: number }
+  | { status: 'unavailable'; reason: string }
+
+export interface AccessToken {
+  value: string
+  /** epoch ms when the token expires */
+  expiresAt: number
+}
+
 export const SAVED_VIDEOS_ID = 'saved-videos'

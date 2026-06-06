@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { SAVED_VIDEOS_ID, type Playlist, type Progress, type Video } from '../types'
+import {
+  SAVED_VIDEOS_ID,
+  type AccessToken,
+  type Playlist,
+  type Progress,
+  type TranscriptResult,
+  type Video,
+} from '../types'
 
 interface StoreState {
   apiKey: string
@@ -8,7 +15,16 @@ interface StoreState {
   videos: Record<string, Video>
   progress: Record<string, Progress>
 
+  /** OAuth client id (persisted). The access token is in-memory only (not persisted). */
+  oauthClientId: string
+  accessToken: AccessToken | null
+  /** cached transcripts keyed by videoId */
+  transcripts: Record<string, TranscriptResult>
+
   setApiKey: (key: string) => void
+  setOAuthClientId: (id: string) => void
+  setAccessToken: (token: AccessToken | null) => void
+  cacheTranscript: (videoId: string, result: TranscriptResult) => void
 
   /** merge a batch of fetched videos into the cache */
   upsertVideos: (videos: Video[]) => void
@@ -35,8 +51,15 @@ export const useStore = create<StoreState>()(
       playlists: [],
       videos: {},
       progress: {},
+      oauthClientId: '',
+      accessToken: null,
+      transcripts: {},
 
       setApiKey: (key) => set({ apiKey: key.trim() }),
+      setOAuthClientId: (id) => set({ oauthClientId: id.trim() }),
+      setAccessToken: (token) => set({ accessToken: token }),
+      cacheTranscript: (videoId, result) =>
+        set((s) => ({ transcripts: { ...s.transcripts, [videoId]: result } })),
 
       upsertVideos: (incoming) =>
         set((s) => {
@@ -148,6 +171,8 @@ export const useStore = create<StoreState>()(
     {
       name: 'digest-store',
       version: 1,
+      // Persist everything except the short-lived access token (kept in memory only).
+      partialize: ({ accessToken: _omit, ...rest }) => rest,
     },
   ),
 )
