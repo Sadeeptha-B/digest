@@ -29,7 +29,12 @@ export function TranscriptPanel({
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(-1)
   const [fileError, setFileError] = useState<string | null>(null)
+  // When the user scrolls away from the active line we pause auto-scroll so they can
+  // read ahead; `dir` is where the current line sits relative to the viewport.
+  const [following, setFollowing] = useState(true)
+  const [dir, setDir] = useState<'up' | 'down'>('up')
   const rowRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
+  const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -91,11 +96,40 @@ export function TranscriptPanel({
     return () => window.clearInterval(timer)
   }, [lines, playerRef])
 
-  // Keep the active line in view (only when not filtering).
+  // Keep the active line in view (only when not filtering and the user hasn't scrolled away).
   useEffect(() => {
-    if (query || activeIdx < 0) return
+    if (query || !following || activeIdx < 0) return
     rowRefs.current.get(activeIdx)?.scrollIntoView({ block: 'nearest' })
-  }, [activeIdx, query])
+  }, [activeIdx, query, following])
+
+  // Searching or clearing the search resumes following the current line.
+  useEffect(() => {
+    setFollowing(true)
+  }, [query])
+
+  // Pause auto-scroll once the active line leaves the viewport; resume when it's back in view.
+  function onScroll() {
+    if (query) return
+    const container = scrollRef.current
+    const row = rowRefs.current.get(activeIdx)
+    if (!container || !row) return
+    const c = container.getBoundingClientRect()
+    const r = row.getBoundingClientRect()
+    if (r.bottom <= c.top) {
+      setFollowing(false)
+      setDir('up')
+    } else if (r.top >= c.bottom) {
+      setFollowing(false)
+      setDir('down')
+    } else {
+      setFollowing(true)
+    }
+  }
+
+  function jumpToCurrent() {
+    setFollowing(true)
+    rowRefs.current.get(activeIdx)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }
 
   const filtered = useMemo(() => {
     if (!lines) return []
@@ -184,15 +218,17 @@ export function TranscriptPanel({
   }
 
   // --- Loaded transcript ---
+  const showJump = !query && !following && activeIdx >= 0
   return (
-    <div className="flex min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search transcript…"
         className="mb-2 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-white outline-none focus:border-accent-500"
       />
-      <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
+      <div className="relative min-h-0 flex-1">
+        <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto no-scrollbar">
         {filtered.length === 0 ? (
           <p className="px-1 py-2 text-sm text-zinc-500">No matching lines.</p>
         ) : (
@@ -218,6 +254,27 @@ export function TranscriptPanel({
               )
             })}
           </ul>
+        )}
+        </div>
+        {showJump && (
+          <button
+            onClick={jumpToCurrent}
+            className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-accent-600 px-3 py-1.5 text-xs font-medium text-white shadow-lg shadow-black/30 hover:bg-accent-500"
+          >
+            <svg
+              className={`h-3.5 w-3.5 ${dir === 'up' ? 'rotate-180' : ''}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+            Current
+          </button>
         )}
       </div>
     </div>
