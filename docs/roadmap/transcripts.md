@@ -1,20 +1,26 @@
 # Transcripts & Summaries — Options and Decision Guide
 
-_Last updated: 2026-06-06_
+_Last updated: 2026-06-07_
 
 This document captures **every option** we have evaluated for adding transcripts (and AI
 summaries) to **Digest**, with costs, implementation details, trade-offs, and a decision
 guide. It is meant to be read once and used to choose a direction.
+
+> **Where the backend runs** (home server vs. non-home, static-host choice, exposure via
+> Tailscale/Cloudflare Tunnel, costs & maintenance) is covered in its own doc:
+> [`hosting.md`](./hosting.md). This doc decides *how* transcripts are fetched; that one
+> decides *where* it's deployed.
 
 ---
 
 ## 1. TL;DR
 
 - **The official YouTube API cannot fetch auto-generated captions** — even for videos you
-  own. This is a hard restriction, not a bug, and it's why the in-app "Load transcript"
-  button fails for typical lecture videos.
-- **What already works today:** **manual `.srt`/`.vtt` import** (in the Transcript tab) and
-  the official API path **only when a video has a *manually uploaded* caption track**.
+  own. This is a hard restriction, not a bug. Because the official `captions.download` path
+  only ever succeeded for the rare video with a *manually uploaded* track — while costing
+  250 quota units/video and requiring the broad `youtube.force-ssl` scope — **it has been
+  removed**. Transcripts are now **manual import only**.
+- **What works today:** **manual `.srt`/`.vtt` import** (in the Transcript tab).
 - **The single best long-term option for this use case is a home server running `yt-dlp`
   (+ Whisper as fallback).** It is free, reaches **private** videos (via your login
   cookies), and avoids the cloud-IP blocking that breaks hosted scrapers — because it runs
@@ -22,9 +28,10 @@ guide. It is meant to be read once and used to choose a direction.
 - **getrecall.ai** is a **complementary summary source** (not a full transcript): its new
   read-only API can surface the summaries you already generate, ideally behind the same home
   server to protect the key.
-- The app already has a **provider seam** (`getTranscript` in
-  [`src/lib/transcript.ts`](../src/lib/transcript.ts)) so any of these slot in **without UI
-  changes**.
+- A future automated provider would re-introduce a small **provider seam** (a
+  `getTranscript(video)` that calls a proxy/home-server endpoint and returns a
+  `TranscriptResult`), feeding the same `cacheTranscript(...)` the manual importer uses — so
+  no UI changes are needed when one lands.
 
 **Recommended path:** Manual import now → home-server `yt-dlp`/Whisper provider when the
 server is up → optional Recall "Summary" tab alongside it.
@@ -54,9 +61,11 @@ These four constraints, taken together, are what make each option viable or not.
 - **Reaches auto-captions?** **No** — the dealbreaker.
 - **CORS:** May also be blocked from the browser; secondary concern given the 403.
 - **ToS:** Fully sanctioned.
-- **Status in app:** Implemented; only succeeds when a *manually uploaded* track exists.
-- **Verdict:** Keep as a "use it if a real caption track exists" path; **not** a general
-  solution.
+- **Status in app:** **Removed.** It only ever succeeded when a *manually uploaded* track
+  existed, yet cost 250 quota units/video and forced the broad `youtube.force-ssl` scope on
+  every sign-in. The cost/benefit didn't justify keeping it.
+- **Verdict:** **Not** a general solution. Manual import (Option 5) covers the same cases
+  (owner, real caption track) for free and without OAuth.
 
 ### Option 2 — Unofficial scrape behind your own cloud proxy
 - **What it does:** A serverless function runs `youtube-transcript` /
@@ -129,7 +138,8 @@ The self-hosted route that resolves the constraints from §2.
 - **Cost:** Hardware/electricity only; software is free/open-source.
 - **Reaching it from the app:** Expose via **Tailscale** (private mesh, simplest/safest) or
   **Cloudflare Tunnel** (public HTTPS). Add a **server base URL + shared secret** in Settings;
-  CORS allows the app origin.
+  CORS allows the app origin. **The Tailscale-vs-Tunnel trade-off (and which static host to
+  pair it with) is decided in [`hosting.md`](./hosting.md) §4 (Scenario 2).**
 - **Concerns:** You run/maintain it; cookies must be refreshed periodically; keep the
   endpoint authenticated so only you can call it.
 - **How it plugs in:** Implement `ProxyTranscriptProvider` against this endpoint;
@@ -198,7 +208,7 @@ YouTube videos/articles into cards), **not** Recall.ai the meeting-bot API.
 
 - **Is the content public, unlisted, or private?** The single biggest factor.
   - Public/unlisted → Options 2/3 reach it.
-  - Private → only Options 1 (manual track), 4, 5, 6 reach it.
+  - Private → only Options 4, 5, 6 reach it.
 - **CORS:** Anything hitting YouTube/timedtext directly needs a server. Third-party APIs and
   the official `captions.list` (JSON) are usually browser-OK; `captions.download` and Recall
   are uncertain — a proxy removes the question.
@@ -214,12 +224,13 @@ YouTube videos/articles into cards), **not** Recall.ai the meeting-bot API.
 
 ## 6. How each plugs into the app
 
-The provider seam already exists in [`src/lib/transcript.ts`](../src/lib/transcript.ts):
+The provider seam was removed along with the official path; an automated provider would
+re-introduce it as a thin module:
 
 ```ts
-getTranscript(video, token)   // tries officialProvider today
-// → fall through to ProxyTranscriptProvider for Options 2/3/6
-//   (a fetch to your endpoint or a third-party API, returning the same TranscriptResult)
+getTranscript(video)          // calls a ProxyTranscriptProvider for Options 2/3/6
+// → a fetch to your endpoint or a third-party API, returning a TranscriptResult,
+//   then cacheTranscript(video.id, result) — the same sink the manual importer uses.
 ```
 
 - **Transcript providers (Options 2/3/6):** implement `ProxyTranscriptProvider.fetch()`
@@ -258,6 +269,7 @@ No captions exist for a video at all?      ──► Option 4 / Option 6's Whisp
    "Transcript server URL / secret" setting, so the app is ready to point at the home server.
 3. **When the home server lands:** stand up `GET /transcript?videoId=` (yt-dlp + Whisper
    fallback). This becomes the **primary** transcript path — free, private-capable, reliable.
+   For *where* to run and *how* to expose it, follow [`hosting.md`](./hosting.md) §4 & §8.
 4. **Alongside:** add a `/recall?videoId=` proxy on the same server and a **Summary tab** to
    surface getrecall.ai summaries (with click-to-seek where `timestamps` exist).
 
@@ -268,7 +280,7 @@ No captions exist for a video at all?      ──► Option 4 / Option 6's Whisp
 | Capability | Status |
 |---|---|
 | On-screen captions auto-enabled (`cc_load_policy`) | ✅ Shipped |
-| Official transcript (owned, manual tracks) | ✅ Shipped (limited by §2) |
+| Official transcript (owned, manual tracks) | ❌ Removed (250 quota u + broad scope, rarely worked) |
 | Manual `.srt`/`.vtt` import | ✅ Shipped |
 | Multi-select "Import from my channel" (incl. private) | ✅ Shipped |
 | `ProxyTranscriptProvider` (Options 2/3/6) | ⬜ Seam stubbed, not built |

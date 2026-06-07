@@ -6,8 +6,8 @@ queue — no sidebar recommendations, no autoplay to unrelated content, no end-s
 grid of "related" videos.
 
 Everything is stored locally in your browser — there is no backend. Sign in with Google
-(optional) to reach your private playlists and transcripts; otherwise a public API key is
-enough for public/unlisted content.
+(optional) to reach your private playlists; otherwise a public API key is enough for
+public/unlisted content.
 
 ## Features
 
@@ -33,15 +33,15 @@ enough for public/unlisted content.
 ## Getting started
 
 There are two ways in. **Signing in with Google is recommended** — it unlocks your private
-playlists and transcripts, and needs no API key. The API key is an optional fallback for
-browsing public content without signing in.
+playlists and needs no API key. The API key is an optional fallback for browsing public
+content without signing in.
 
 ### 1. Configure Google sign-in (recommended)
 
 1. In the [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com),
    enable **YouTube Data API v3**.
 2. Configure the **OAuth consent screen** (External), add the scope
-   `https://www.googleapis.com/auth/youtube.force-ssl`, and add your Google account as a
+   `https://www.googleapis.com/auth/youtube.readonly`, and add your Google account as a
    **Test user** (staying in *Testing* needs no Google verification for personal use).
 3. **Credentials → Create OAuth client ID → Web application.** Add your origins to
    **Authorized JavaScript origins**: `http://localhost:5174` and your Pages URL

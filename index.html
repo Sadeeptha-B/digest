@@ -2,6 +2,17 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Content-Security-Policy. Limits where scripts/connections/frames can come from so an
+      injected script can't exfiltrate the in-memory OAuth token or the stored API key.
+      Allowances: GIS client script + its auth iframes/styles (accounts.google.com), the
+      YouTube Data API (www.googleapis.com), and thumbnail hosts (ytimg/ggpht).
+      Prefer serving this as a real HTTP header in production; the meta tag is the fallback.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; connect-src 'self' https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; img-src 'self' data: https://*.ytimg.com https://*.ggpht.com; style-src 'self' 'unsafe-inline' https://accounts.google.com; base-uri 'self'; object-src 'none'; form-action 'self'"
+    />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#0a0a0b" />

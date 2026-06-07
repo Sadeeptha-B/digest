@@ -2,9 +2,10 @@ import { useStore } from '../store/useStore'
 import { EMBEDDED_CLIENT_ID } from './config'
 import type { AccessToken } from '../types'
 
-// Single scope that covers both captions.download and reading the signed-in
-// account's own private/unlisted playlists and videos.
-export const YT_SCOPE = 'https://www.googleapis.com/auth/youtube.force-ssl'
+// Read-only scope: enough to read the signed-in account's own private/unlisted
+// playlists and videos. (We no longer fetch captions via the API, so the broader
+// read-write `youtube.force-ssl` scope is not needed.)
+export const YT_SCOPE = 'https://www.googleapis.com/auth/youtube.readonly'
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
 const SILENT_TOKEN_ERROR_CODES = new Set([
     'access_denied',
