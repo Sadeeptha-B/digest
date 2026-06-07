@@ -1,0 +1,4 @@
+# SPA fallback: serve index.html for any path that isn't a real static asset, so client-side
+# routes / deep links don't 404. Cloudflare Pages serves existing files first, so this only
+# affects unmatched paths. Harmless even if the app has no client-side router.
+/*    /index.html    200

@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { YouTubePlayer } from 'react-youtube'
 import { useStore } from '../store/useStore'
-import { getValidToken, isOAuthConfigured, signIn } from '../lib/oauth'
-import { getTranscript } from '../lib/transcript'
 import { parseCaptionFile } from '../lib/captions'
 import type { Video } from '../types'
 
@@ -26,7 +24,6 @@ export function TranscriptPanel({
   const cacheTranscript = useStore((s) => s.cacheTranscript)
   const clearTranscript = useStore((s) => s.clearTranscript)
 
-  const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(-1)
   const [fileError, setFileError] = useState<string | null>(null)
@@ -52,23 +49,6 @@ export function TranscriptPanel({
       cacheTranscript(video.id, { status: 'ok', lines, source: 'manual', fetchedAt: Date.now() })
     } catch {
       setFileError('Could not read that file.')
-    }
-  }
-
-  async function load() {
-    setLoading(true)
-    try {
-      let token = await getValidToken()
-      if (!token) token = await signIn() // never consented yet → interactive
-      const res = await getTranscript(video, token.value)
-      cacheTranscript(video.id, res)
-    } catch (e) {
-      cacheTranscript(video.id, {
-        status: 'unavailable',
-        reason: e instanceof Error ? e.message : 'Could not load the transcript.',
-      })
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -170,49 +150,13 @@ export function TranscriptPanel({
     </div>
   )
 
-  // --- Empty / gating states ---
-  if (!isOAuthConfigured()) {
+  // --- Empty state: no transcript imported yet ---
+  if (!lines) {
     return (
       <div className="px-1">
         <p className="text-sm text-zinc-500">
-          Add an <span className="text-zinc-300">OAuth Client ID</span> in Settings, then sign in,
-          to load transcripts for your own videos — or import one manually:
+          Import a transcript file to read along and jump to any line.
         </p>
-        {uploader}
-      </div>
-    )
-  }
-
-  if (!result) {
-    return (
-      <div className="px-1">
-        <button
-          onClick={load}
-          disabled={loading}
-          className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
-        >
-          {loading ? 'Loading…' : 'Load transcript'}
-        </button>
-        <p className="mt-2 text-xs text-zinc-500">
-          Works for videos on your account with an uploaded caption track. Auto-generated
-          captions can't be downloaded via the API — import a file instead.
-        </p>
-        {uploader}
-      </div>
-    )
-  }
-
-  if (result.status === 'unavailable') {
-    return (
-      <div className="px-1">
-        <p className="text-sm text-zinc-400">{result.reason}</p>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="mt-2 rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800 disabled:opacity-40"
-        >
-          {loading ? 'Retrying…' : 'Try again'}
-        </button>
         {uploader}
       </div>
     )

@@ -1,0 +1,12 @@
+# Cloudflare Pages / Netlify response headers (served at the site root).
+# This is the header-based CSP — stronger than the <meta> tag in index.html because it can
+# also set frame-ancestors (clickjacking). Keep it in sync with that meta tag.
+#
+# Note on Referrer-Policy: it is deliberately strict-origin-when-cross-origin (NOT no-referrer)
+# so the browser still sends the origin to googleapis.com — the YouTube API *key* relies on the
+# HTTP-referrer restriction set in Google Cloud, which breaks if no Referer is sent.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; connect-src 'self' https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; img-src 'self' data: https://*.ytimg.com https://*.ggpht.com; style-src 'self' 'unsafe-inline' https://accounts.google.com; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY

@@ -36,7 +36,7 @@ export type TranscriptResult =
   | {
       status: 'ok'
       lines: TranscriptLine[]
-      source: 'official' | 'proxy' | 'manual'
+      source: 'manual'
       fetchedAt: number
     }
   | { status: 'unavailable'; reason: string }
