@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:pages": "wrangler pages dev -- npm run dev",
+    "dev:pages": "wrangler pages dev --proxy 5174 -- npm run dev",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && wrangler pages deploy",
+    "deploy": "npm run build && wrangler pages deploy dist",
     "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {

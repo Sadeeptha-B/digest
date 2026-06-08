@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { isOAuthConfigured } from '../lib/oauth'
 import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
 import { useApiKey } from '../hooks/useApiKey'
 
 /**
- * First-run onboarding. Two ways in:
- *  - Sign in with Google (recommended) — unlocks private playlists + transcripts, and needs
- *    no API key.
+ * First-run onboarding (shown only when the library is empty and there's no live session). Two
+ * ways in, both always available:
+ *  - Sign in with Google (recommended) — unlocks private playlists, and needs no API key.
  *  - Use a public API key — read-only access to public/unlisted content, no sign-in.
  */
 export function ApiKeyGate() {
@@ -15,48 +14,39 @@ export function ApiKeyGate() {
     const { busy, error, start: handleSignIn } = useGoogleSignIn()
     const { busy: keyBusy, error: keyError, save: saveKey } = useApiKey()
 
-    const oauth = isOAuthConfigured()
-
     return (
         <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center px-6 py-16">
             <h1 className="text-2xl font-semibold text-white">Digest</h1>
             <p className="mt-1 text-sm text-zinc-400">Distraction-free YouTube playlists.</p>
 
             <div className="mt-8 rounded-xl border border-ink-700 bg-ink-850 p-5">
-                {oauth ? (
-                    <>
-                        <h2 className="text-base font-medium text-white">Sign in to get started</h2>
-                        <p className="mt-1 text-sm text-zinc-400">
-                            Connect your Google account to access your playlists and transcripts. No API key
-                            needed.
-                        </p>
-                        <button
-                            onClick={handleSignIn}
-                            disabled={busy}
-                            className="mt-4 rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
-                        >
-                            {busy ? 'Signing in…' : 'Sign in with Google'}
-                        </button>
-                        {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+                <h2 className="text-base font-medium text-white">Sign in to get started</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                    Connect your Google account to access your playlists. No API key needed.
+                </p>
+                <button
+                    onClick={handleSignIn}
+                    disabled={busy}
+                    className="mt-4 rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
+                >
+                    {busy ? 'Signing in…' : 'Sign in with Google'}
+                </button>
+                {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
 
-                        <button
-                            onClick={() => setShowKey((value) => !value)}
-                            className="mt-4 block text-sm text-accent-400 hover:underline"
-                        >
-                            {showKey ? 'Hide' : 'Or use a public API key instead'}
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        <h2 className="text-base font-medium text-white">Add a YouTube API key</h2>
-                        <p className="mt-1 text-sm text-zinc-400">
-                            A public API key gives read-only access to public/unlisted content. (To sign in for
-                            private playlists and transcripts, configure an OAuth Client ID — see the README.)
-                        </p>
-                    </>
-                )}
+                <p className="mt-3 rounded-lg border border-ink-700 bg-ink-900/60 px-3 py-2 text-xs text-zinc-500">
+                    Sign-in is limited to <span className="text-zinc-300">pre-approved Google accounts</span>{' '}
+                    (this app is in Google's “Testing” mode). If yours isn't approved, use a public API
+                    key below instead.
+                </p>
 
-                {(showKey || !oauth) && (
+                <button
+                    onClick={() => setShowKey((value) => !value)}
+                    className="mt-3 block text-sm text-accent-400 hover:underline"
+                >
+                    {showKey ? 'Hide' : 'Or use a public API key instead'}
+                </button>
+
+                {showKey && (
                     <>
                         <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-zinc-400">
                             <li>
@@ -98,7 +88,7 @@ export function ApiKeyGate() {
                             }}
                         >
                             <input
-                                autoFocus={!oauth}
+                                autoFocus
                                 type="password"
                                 value={key}
                                 onChange={(e) => setKey(e.target.value)}

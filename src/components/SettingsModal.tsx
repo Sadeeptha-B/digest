@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
-import { isOAuthConfigured, signOut, tokenIsValid } from '../lib/oauth'
+import { signOut, tokenIsValid } from '../lib/oauth'
 import { clearApiKey } from '../lib/apiKey'
 import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
 import { useApiKey } from '../hooks/useApiKey'
@@ -16,7 +16,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     const [showKey, setShowKey] = useState(false)
     const [confirmClear, setConfirmClear] = useState(false)
 
-    const oauthEnabled = isOAuthConfigured()
     const signedIn = hasSignedIn || tokenIsValid(accessToken)
     const { busy: authBusy, error: authError, start: handleSignIn } = useGoogleSignIn()
     const { configured: keyConfigured, busy: keyBusy, error: keyError, save: saveKey, remove: removeKey } = useApiKey()
@@ -39,9 +38,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             >
                 <h2 className="text-base font-medium text-white">Settings</h2>
 
-                {/* --- Google account (only when the OAuth backend is enabled for this build) --- */}
-                {oauthEnabled && (
-                    <>
+                {/* --- Google account --- */}
+                <>
                         <label className="mt-4 block text-sm text-zinc-400">Google account</label>
                         <div className="mt-2 flex items-center gap-2">
                             {signedIn ? (
@@ -73,8 +71,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                         {authError && <p className="mt-1 text-sm text-rose-400">{authError}</p>}
 
                         <hr className="my-4 border-ink-700" />
-                    </>
-                )}
+                </>
 
                 {/* --- API key (only relevant when not signed in) --- */}
                 {signedIn ? (

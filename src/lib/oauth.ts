@@ -1,16 +1,11 @@
 import { useStore } from '../store/useStore'
-import { AUTH_BASE, OAUTH_ENABLED } from './config'
+import { AUTH_BASE } from './config'
 import type { AccessToken } from '../types'
 
 // OAuth runs through same-origin Cloudflare Pages Functions (see /functions/auth). The browser
 // never holds the Google client secret: it opens a popup to /auth/login, receives a short-lived
 // access token via postMessage, and silently renews it via POST /auth/refresh (which reads an
 // HttpOnly refresh-token cookie). The access token stays in memory only, as before.
-
-/** True when an auth backend is configured (the Pages Functions deployment). */
-export function isOAuthConfigured(): boolean {
-    return OAUTH_ENABLED
-}
 
 class OAuthError extends Error {
     code: string
@@ -132,7 +127,6 @@ async function refresh(): Promise<AccessToken | null> {
  * restorable session (so callers can prompt an interactive sign-in instead).
  */
 export async function getValidToken(): Promise<AccessToken | null> {
-    if (!OAUTH_ENABLED) return null
     const current = useStore.getState().accessToken
     if (tokenIsValid(current)) return current
     return refresh()
