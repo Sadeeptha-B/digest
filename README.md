@@ -5,9 +5,9 @@ video) URL, and watch it in a stripped-down player surrounded only by **your own
 queue — no sidebar recommendations, no autoplay to unrelated content, no end-screen
 grid of "related" videos.
 
-Everything is stored locally in your browser — there is no backend. Sign in with Google
-(optional) to reach your private playlists; otherwise a public API key is enough for
-public/unlisted content.
+Everything you save stays in your browser. When Google sign-in is enabled, a small
+Cloudflare Pages Functions layer handles the OAuth code exchange and refresh-token cookie;
+otherwise a public API key is enough for public/unlisted content.
 
 ## Features
 
@@ -38,36 +38,44 @@ content without signing in.
 
 ### 1. Configure Google sign-in (recommended)
 
+Sign-in uses the OAuth **Authorization Code** flow, brokered by a small serverless backend
+(Cloudflare Pages Functions in [`functions/auth/`](functions/auth)). The Google **client secret**
+and the long-lived **refresh token** stay server-side; the browser only ever receives a
+short-lived access token. See the full setup in
+[Deploying to Cloudflare Pages](#deploying-to-cloudflare-pages) below — in short:
+
 1. In the [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com),
    enable **YouTube Data API v3**.
 2. Configure the **OAuth consent screen** (External), add the scope
    `https://www.googleapis.com/auth/youtube.readonly`, and add your Google account as a
    **Test user** (staying in *Testing* needs no Google verification for personal use).
-3. **Credentials → Create OAuth client ID → Web application.** Add your origins to
-   **Authorized JavaScript origins**: `http://localhost:5174` and your Pages URL
-   `https://<user>.github.io`.
-4. Put the client ID in a `.env` file (copy from [.env.example](.env.example)):
-
-   ```
-   VITE_GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
-   ```
-
-   The OAuth client ID is **public app metadata, not a secret** — it's restricted by the
-   authorized origins above. With it set, users just click **Sign in with Google**; no client
-   ID is pasted at runtime. (If you don't set the env var, the app falls back to a Client ID
-   field in Settings.)
+3. **Credentials → Create OAuth client ID → Web application.** Under **Authorized redirect
+   URIs** add `http://localhost:8788/auth/callback` (local dev) and
+   `https://<project>.pages.dev/auth/callback` (production).
+4. Provide the **client id + secret** to the backend as server-side secrets — in `.dev.vars`
+   locally (copy [.dev.vars.example](.dev.vars.example)) and on the Cloudflare Pages project for
+   production. They are **never** bundled into the frontend.
 
 ### 2. (Optional) API key for public-only, no-sign-in use
 
 Under **Credentials**, create an **API key** and restrict it by **HTTP referrer**
-(`http://localhost:5174/*`, `https://<user>.github.io/*`). Not needed when signed in.
+(`http://localhost:5174/*`, `https://<project>.pages.dev/*`). Not needed when signed in.
 
 ### 3. Run locally
 
 ```bash
 npm install
-npm run dev      # http://localhost:5174
+npm run dev        # http://localhost:5174 — frontend only (Google sign-in won't work here)
 ```
+
+To exercise Google sign-in locally you need the auth Functions running too. Put your client
+id/secret in `.dev.vars` (copy [.dev.vars.example](.dev.vars.example)), then:
+
+```bash
+npm run dev:pages  # http://localhost:8788 — Vite + the /auth Pages Functions on one origin
+```
+
+Make sure `http://localhost:8788/auth/callback` is in the OAuth client's redirect URIs.
 
 ### 4. Build
 
@@ -86,28 +94,68 @@ caches the app shell for fast loads and offline UI.
 ## Tech stack
 
 React + TypeScript + Vite, Tailwind CSS, Zustand (with `persist` for local storage),
-React Router (`HashRouter`), `react-youtube`, and `@dnd-kit` for drag-and-drop reordering.
+React Router (`BrowserRouter` + SPA rewrite), `react-youtube`, and `@dnd-kit` for drag-and-drop reordering. Google
+sign-in is brokered by **Cloudflare Pages Functions** in [`functions/auth/`](functions/auth).
 
-## Deploying to GitHub Pages
+## Deploying to Cloudflare Pages
 
-This repo includes a workflow at [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
-that builds and deploys on every push to `main`.
+The app deploys to Cloudflare Pages as static assets **plus** the OAuth Functions in
+[`functions/`](functions), served on the same origin. Moving off `user.github.io` also gives the
+app its **own origin**, isolating its `localStorage` from any other site you host there.
 
-One-time setup:
-1. **Settings → Pages → Source = GitHub Actions.**
-2. **Settings → Secrets and variables → Actions → Variables → New variable:** add
-   `VITE_GOOGLE_CLIENT_ID` with your OAuth client ID. It's public app metadata (not a secret),
-   so a repository *variable* is appropriate. The workflow injects it at build time.
+### A. Google Cloud (OAuth client)
 
-After the next push to `main`, the site publishes to `https://<user>.github.io/digest/`.
+1. Enable **YouTube Data API v3** and configure the **OAuth consent screen** (External; add the
+   `youtube.readonly` scope and yourself as a Test user) — as in
+   [§1 above](#1-configure-google-sign-in-recommended).
+2. **Credentials → Create OAuth client ID → Web application.** Add **Authorized redirect URIs**:
+   - `http://localhost:8788/auth/callback` — local dev (`npm run dev:pages`)
+   - `https://<project>.pages.dev/auth/callback` — production (fill in after step B picks the name)
 
-Notes:
-- The Pages build sets `BASE_PATH=/digest/` (in the workflow), so assets and the PWA manifest
-  (`start_url`/`scope`) resolve under the project subpath. Local dev/preview stays at `/`.
-- The app uses `HashRouter`, so deep links and refreshes work on Pages without
-  server-side rewrites.
-- Add your Pages URL to the OAuth client's authorized origins (and, if used, the API key's
-  referrer restrictions).
+   Copy the generated **Client ID** and **Client secret**.
+
+### B. Create the Pages project
+
+1. Push this repo to GitHub/GitLab.
+2. In the [Cloudflare dashboard](https://dash.cloudflare.com/) → **Workers & Pages → Create →
+   Pages → Connect to Git**, pick the repo. This gives the cleanest setup: every push to `main`
+   builds and deploys (with preview deployments for other branches), and the `functions/`
+   directory is compiled automatically.
+3. **Build settings:**
+   - Framework preset: **Vite** (or *None*)
+   - Build command: `npm run build`
+   - Build output directory: `dist`
+4. Save and run the first deploy. Note the assigned URL `https://<project>.pages.dev`, then go
+   back to Google Cloud (step A2) and confirm its `/auth/callback` redirect URI is listed.
+
+### C. Set the OAuth secrets on the project
+
+In **Pages project → Settings → Variables and secrets**, add two **secrets** (encrypted) for the
+**Production** (and **Preview**, if you want sign-in on previews) environments:
+
+| Name | Value |
+|---|---|
+| `GOOGLE_CLIENT_ID` | the Web client ID from step A2 |
+| `GOOGLE_CLIENT_SECRET` | the Web client secret from step A2 |
+
+Then redeploy (Deployments → Retry/Redeploy) so the Functions pick them up. The frontend needs
+**no** environment variables.
+
+> CLI alternative to B+C: `npm run deploy` (runs `wrangler pages deploy`) after
+> `wrangler pages secret put GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+
+### Notes
+
+- The app builds at the **root** (`/`) of its own origin — no `BASE_PATH` needed (unlike the old
+  GitHub Pages `/digest/` subpath).
+- Client-side routes use `BrowserRouter`; [`public/_redirects`](public/_redirects) rewrites deep
+  links back to `index.html` so refreshes still work.
+- [`public/_headers`](public/_headers) ships a real CSP response header (with `frame-ancestors`),
+  which Cloudflare Pages serves automatically.
+- Add your `https://<project>.pages.dev` to the YouTube **API key**'s referrer restrictions if you
+  use the API-key fallback.
+- **Custom domain (optional):** add it under the project's **Custom domains** tab, then add
+  `https://yourdomain.com/auth/callback` to the OAuth client's redirect URIs.
 
 ## Scope / not included
 

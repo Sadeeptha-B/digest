@@ -1,7 +1,10 @@
 // Build-time configuration.
 //
-// The Google OAuth **Client ID is not a secret** — it is app metadata designed to be embedded
-// in client-side apps, and it only works from the authorized JavaScript origins you configure
-// in Google Cloud. Set it via a `.env` file (see `.env.example`) so it ships with the build and
-// users never have to paste it. The Settings field is only a fallback when none is embedded.
-export const EMBEDDED_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
+// OAuth is handled server-side by Cloudflare Pages Functions mounted at `/auth` on the same
+// origin (they hold the Google client id + secret). The browser never sees a client id or secret
+// — it only opens the sign-in popup and calls `/auth/refresh`.
+//
+// `VITE_AUTH_BASE` lets a static-only build (no Functions) disable OAuth: set it to an empty
+// string and the app falls back to API-key-only mode.
+export const AUTH_BASE: string = import.meta.env.VITE_AUTH_BASE ?? '/auth'
+export const OAUTH_ENABLED: boolean = AUTH_BASE !== ''

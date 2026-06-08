@@ -6,7 +6,7 @@
 # so the browser still sends the origin to googleapis.com — the YouTube API *key* relies on the
 # HTTP-referrer restriction set in Google Cloud, which breaks if no Referer is sent.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client https://www.youtube.com; connect-src 'self' https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com https://www.youtube-nocookie.com; img-src 'self' data: https://*.ytimg.com https://*.ggpht.com; style-src 'self' 'unsafe-inline' https://accounts.google.com; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.youtube.com; connect-src 'self' https://www.googleapis.com; frame-src https://www.youtube-nocookie.com; img-src 'self' data: https://*.ytimg.com https://*.ggpht.com; style-src 'self' 'unsafe-inline'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY

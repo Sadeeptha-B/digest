@@ -1,0 +1,8 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "digest",
+  "compatibility_date": "2026-06-01",
+  // Static build output. Cloudflare Pages also auto-compiles the sibling `functions/` directory
+  // into Pages Functions served on the same origin (e.g. /auth/*).
+  "pages_build_output_dir": "dist"
+}

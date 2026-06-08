@@ -15,8 +15,7 @@ interface StoreState {
     videos: Record<string, Video>
     progress: Record<string, Progress>
 
-    /** OAuth client id fallback (persisted). The access token is in-memory only (not persisted). */
-    oauthClientId: string
+    /** The access token is in-memory only (not persisted); the refresh token lives server-side. */
     accessToken: AccessToken | null
     /** Remembers that the user has signed in, so we can silently restore the session and skip
      *  the onboarding gate after a reload (the token itself is not persisted). */
@@ -25,7 +24,6 @@ interface StoreState {
     transcripts: Record<string, TranscriptResult>
 
     setApiKey: (key: string) => void
-    setOAuthClientId: (id: string) => void
     setAccessToken: (token: AccessToken | null) => void
     setHasSignedIn: (value: boolean) => void
     cacheTranscript: (videoId: string, result: TranscriptResult) => void
@@ -57,7 +55,6 @@ const initialData = {
     playlists: [] as Playlist[],
     videos: {} as Record<string, Video>,
     progress: {} as Record<string, Progress>,
-    oauthClientId: '',
     accessToken: null as AccessToken | null,
     hasSignedIn: false,
     transcripts: {} as Record<string, TranscriptResult>,
@@ -94,7 +91,6 @@ export const useStore = create<StoreState>()(
             ...initialData,
 
             setApiKey: (key) => set({ apiKey: key.trim() }),
-            setOAuthClientId: (id) => set({ oauthClientId: id.trim() }),
             setAccessToken: (token) => set({ accessToken: token }),
             setHasSignedIn: (value) => set({ hasSignedIn: value }),
             cacheTranscript: (videoId, result) =>
@@ -203,9 +199,16 @@ export const useStore = create<StoreState>()(
         }),
         {
             name: 'digest-store',
-            version: 1,
+            version: 2,
             // Persist everything except the short-lived access token (kept in memory only).
             partialize: ({ accessToken: _omit, ...rest }) => rest,
+            // v2 dropped the in-browser `oauthClientId` (OAuth moved to a server-side worker).
+            migrate: (persisted) => {
+                if (persisted && typeof persisted === 'object') {
+                    delete (persisted as Record<string, unknown>).oauthClientId
+                }
+                return persisted as StoreState
+            },
         },
     ),
 )
