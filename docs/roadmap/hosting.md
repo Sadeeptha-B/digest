@@ -1,6 +1,16 @@
 # Hosting & Deployment — Options and Decision Guide
 
-_Last updated: 2026-06-07_
+_Last updated: 2026-06-08_
+
+> **Status (2026-06-08):** Roadmap step 1 is **done** — the app moved off shared GitHub Pages to
+> **Cloudflare Pages** (isolated origin + real CSP header). A **thin serverless auth layer** (a
+> "broker" variant of step 4) is also **done**: Google sign-in now runs through Cloudflare Pages
+> Functions in [`functions/auth/`](../../functions/auth) using the OAuth Authorization Code flow.
+> The Google **client secret** and the **refresh token** live server-side (the refresh token in an
+> HttpOnly cookie); the browser still holds only a short-lived in-memory access token and calls the
+> YouTube Data API directly. (A *full* BFF that also proxies the API and removes the in-browser
+> access token + `localStorage` API key remains the next increment.) See the README's
+> "Deploying to Cloudflare Pages" for setup.
 
 This document captures the hosting options for **Digest** and the trade-offs between them.
 It pairs with [`transcripts.md`](./transcripts.md) (which decides *how* transcripts are
@@ -65,7 +75,8 @@ does. GitHub Pages also can't serve custom response headers, so the CSP is stuck
 **Recommendation (Axis A):** **Cloudflare Pages or Netlify.** Each gives a free isolated
 origin and real headers, with the same zero-maintenance push-to-deploy as Pages. A custom
 domain is optional polish, not required. Remember to set `BASE_PATH: /` (not `/digest/`) —
-the app sits at the root of its own subdomain.
+the app sits at the root of its own subdomain, and SPA deep links should rewrite to
+`index.html` (for example via `_redirects`).
 
 ---
 

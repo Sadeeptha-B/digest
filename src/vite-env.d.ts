@@ -2,7 +2,8 @@
 /// <reference types="vite-plugin-pwa/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_GOOGLE_CLIENT_ID?: string
+  /** Base path of the OAuth Pages Functions. Defaults to "/auth"; set "" to disable sign-in. */
+  readonly VITE_AUTH_BASE?: string
 }
 
 interface ImportMeta {

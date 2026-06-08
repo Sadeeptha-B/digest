@@ -1,29 +1,21 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { signOut, tokenIsValid } from '../lib/oauth'
-import { EMBEDDED_CLIENT_ID } from '../lib/config'
 import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
     const apiKey = useStore((s) => s.apiKey)
     const setApiKey = useStore((s) => s.setApiKey)
-    const oauthClientId = useStore((s) => s.oauthClientId)
-    const setOAuthClientId = useStore((s) => s.setOAuthClientId)
     const accessToken = useStore((s) => s.accessToken)
+    const hasSignedIn = useStore((s) => s.hasSignedIn)
     const reset = useStore((s) => s.reset)
 
     const [key, setKey] = useState(apiKey)
-    const [clientId, setClientId] = useState(oauthClientId)
     const [showKey, setShowKey] = useState(false)
     const [confirmClear, setConfirmClear] = useState(false)
 
-    const signedIn = tokenIsValid(accessToken)
-    const clientIdEmbedded = Boolean(EMBEDDED_CLIENT_ID)
-    const { busy: authBusy, error: authError, start: handleSignIn } = useGoogleSignIn({
-        beforeSignIn: () => {
-            if (!clientIdEmbedded) setOAuthClientId(clientId)
-        },
-    })
+    const signedIn = hasSignedIn || tokenIsValid(accessToken)
+    const { busy: authBusy, error: authError, start: handleSignIn } = useGoogleSignIn()
 
     function handleClearData() {
         if (signedIn) signOut() // revoke the token before wiping everything
@@ -44,15 +36,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
                 {/* --- Google account --- */}
                 <label className="mt-4 block text-sm text-zinc-400">Google account</label>
-                {!clientIdEmbedded && (
-                    <input
-                        type="text"
-                        value={clientId}
-                        onChange={(e) => setClientId(e.target.value)}
-                        placeholder="OAuth Client ID …apps.googleusercontent.com"
-                        className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
-                    />
-                )}
                 <div className="mt-2 flex items-center gap-2">
                     {signedIn ? (
                         <>
@@ -69,7 +52,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     ) : (
                         <button
                             onClick={handleSignIn}
-                            disabled={authBusy || (!clientIdEmbedded && !clientId.trim())}
+                            disabled={authBusy}
                             className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
                         >
                             {authBusy ? 'Signing in…' : 'Sign in with Google'}
@@ -153,7 +136,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     <button
                         onClick={() => {
                             setApiKey(key)
-                            if (!clientIdEmbedded) setOAuthClientId(clientId)
                             onClose()
                         }}
                         className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500"

@@ -4,15 +4,21 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    // Base path. Local dev/preview defaults to '/'. The GitHub Pages build sets
-    // BASE_PATH=/digest/ (see .github/workflows/deploy.yml) so assets and the PWA
-    // manifest resolve under the project site https://<user>.github.io/digest/.
+    // Base path. Cloudflare Pages serves the app at the root of its own origin
+    // (https://<project>.pages.dev/), so the default '/' is correct. BASE_PATH stays overridable
+    // for any sub-path host. (The old GitHub Pages build set BASE_PATH=/digest/.)
     base: process.env.BASE_PATH ?? '/',
     plugins: [
         react(),
         VitePWA({
             registerType: 'autoUpdate',
             includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+            workbox: {
+                // The SW's navigation fallback serves the cached app shell (index.html) for SPA
+                // deep links. Exclude the OAuth Functions so popup navigations to /auth/login and
+                // /auth/callback reach the server instead of being shadowed by the app shell.
+                navigateFallbackDenylist: [/^\/auth\//],
+            },
             manifest: {
                 name: 'Digest — distraction-free playlists',
                 short_name: 'Digest',

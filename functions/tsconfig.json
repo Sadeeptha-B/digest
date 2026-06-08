@@ -1,0 +1,15 @@
+{
+  "comment": "Editor-only config for the Cloudflare Pages Functions. The main `tsc -b` build only includes `src`; Cloudflare compiles this directory separately at deploy time.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true
+  },
+  "include": ["**/*.ts"]
+}

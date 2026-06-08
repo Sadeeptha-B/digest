@@ -1,0 +1,7 @@
+# Local secrets for the Cloudflare Pages Functions (the OAuth backend).
+# Copy to `.dev.vars` (gitignored) and fill in. `wrangler pages dev` loads these automatically.
+#
+# In production these are NOT read from here — set them on the Cloudflare Pages project under
+# Settings → Variables and Secrets (see README "Deploying to Cloudflare Pages").
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

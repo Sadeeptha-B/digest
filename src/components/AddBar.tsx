@@ -17,6 +17,7 @@ import type { Playlist } from '../types'
 export function AddBar() {
     const apiKey = useStore((s) => s.apiKey)
     const accessToken = useStore((s) => s.accessToken)
+    const hasSignedIn = useStore((s) => s.hasSignedIn)
     const upsertVideos = useStore((s) => s.upsertVideos)
     const addPlaylist = useStore((s) => s.addPlaylist)
     const addStandaloneVideo = useStore((s) => s.addStandaloneVideo)
@@ -31,12 +32,14 @@ export function AddBar() {
     const [selected, setSelected] = useState<Set<string>>(new Set())
     const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
 
-    const signedIn = tokenIsValid(accessToken)
+    const signedIn = hasSignedIn || tokenIsValid(accessToken)
+    const reauthMessage = 'Sign in again to access your private playlists.'
 
     /** Ensure a valid token if the user has signed in; otherwise fetch anonymously. */
     async function currentAuth(): Promise<Auth> {
-        if (!accessToken) return { apiKey, token: null }
+        if (!hasSignedIn && !accessToken) return { apiKey, token: null }
         const token = await getValidToken()
+        if (!token && !apiKey) throw new Error(reauthMessage)
         return { apiKey, token: token?.value ?? null }
     }
 
@@ -58,8 +61,12 @@ export function AddBar() {
     }
 
     function reportError(err: unknown) {
+        if (err instanceof Error && err.message === reauthMessage) {
+            setError(err.message)
+            return
+        }
         if (isConsentRequired(err)) {
-            setError('Sign in again to access your private playlists.')
+            setError(reauthMessage)
             return
         }
         if (err instanceof YouTubeApiError) {

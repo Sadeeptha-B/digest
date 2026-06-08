@@ -24,5 +24,11 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+# Cloudflare local dev secrets + state
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
+
 # Local-only docs (not committed)
 docs/security-notes.md
