@@ -5,9 +5,10 @@ video) URL, and watch it in a stripped-down player surrounded only by **your own
 queue — no sidebar recommendations, no autoplay to unrelated content, no end-screen
 grid of "related" videos.
 
-Everything you save stays in your browser. When Google sign-in is enabled, a small
-Cloudflare Pages Functions layer handles the OAuth code exchange and refresh-token cookie;
-otherwise a public API key is enough for public/unlisted content.
+Your library (lists, watch progress) stays in your browser. A small Cloudflare Pages Functions
+layer brokers Google sign-in and proxies the YouTube Data API, so credentials — OAuth tokens and
+your API key — live in server-side HttpOnly cookies instead of the browser. Sign in with Google to
+reach your private playlists, or use a public API key for public/unlisted content.
 
 ## Features
 
@@ -58,21 +59,29 @@ short-lived access token. See the full setup in
 
 ### 2. (Optional) API key for public-only, no-sign-in use
 
-Under **Credentials**, create an **API key** and restrict it by **HTTP referrer**
-(`http://localhost:5174/*`, `https://<project>.pages.dev/*`). Not needed when signed in.
+Under **Credentials**, create an **API key**. Because the key is used **server-side** (see below),
+restrict it with an **API restriction** to *YouTube Data API v3* — **not** an HTTP-referrer
+restriction (that requires a browser `Referer` and fails server-side). Paste it into the app once
+(onboarding screen or Settings); it's validated and stored in a `HttpOnly` cookie, never in
+`localStorage`. Not needed when signed in.
+
+YouTube Data API calls (key or OAuth) are proxied through the same-origin Function in
+[`functions/api/`](functions/api), so the credential never reaches page JavaScript. The key is the
+*user's own* (their Google Cloud project + quota); each browser stores its own.
 
 ### 3. Run locally
 
 ```bash
 npm install
-npm run dev        # http://localhost:5174 — frontend only (Google sign-in won't work here)
+npm run dev        # http://localhost:5174 — frontend only (sign-in + YouTube calls won't work here)
 ```
 
-To exercise Google sign-in locally you need the auth Functions running too. Put your client
-id/secret in `.dev.vars` (copy [.dev.vars.example](.dev.vars.example)), then:
+Google sign-in **and** the YouTube Data API now go through Pages Functions (`/auth/*`, `/api/*`),
+so to use the app locally you need them running. Put your client id/secret in `.dev.vars` (copy
+[.dev.vars.example](.dev.vars.example)), then:
 
 ```bash
-npm run dev:pages  # http://localhost:8788 — Vite + the /auth Pages Functions on one origin
+npm run dev:pages  # http://localhost:8788 — Vite + the Pages Functions on one origin
 ```
 
 Make sure `http://localhost:8788/auth/callback` is in the OAuth client's redirect URIs.

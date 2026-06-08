@@ -10,7 +10,9 @@ import {
 } from '../types'
 
 interface StoreState {
-    apiKey: string
+    /** Whether a YouTube API key is configured. The key itself lives in a server-side HttpOnly
+     *  cookie (see lib/apiKey.ts); only this non-secret flag is persisted, for UI gating. */
+    apiKeyConfigured: boolean
     playlists: Playlist[]
     videos: Record<string, Video>
     progress: Record<string, Progress>
@@ -23,7 +25,7 @@ interface StoreState {
     /** cached transcripts keyed by videoId */
     transcripts: Record<string, TranscriptResult>
 
-    setApiKey: (key: string) => void
+    setApiKeyConfigured: (value: boolean) => void
     setAccessToken: (token: AccessToken | null) => void
     setHasSignedIn: (value: boolean) => void
     cacheTranscript: (videoId: string, result: TranscriptResult) => void
@@ -51,7 +53,7 @@ interface StoreState {
 }
 
 const initialData = {
-    apiKey: '',
+    apiKeyConfigured: false,
     playlists: [] as Playlist[],
     videos: {} as Record<string, Video>,
     progress: {} as Record<string, Progress>,
@@ -90,7 +92,7 @@ export const useStore = create<StoreState>()(
         (set, get) => ({
             ...initialData,
 
-            setApiKey: (key) => set({ apiKey: key.trim() }),
+            setApiKeyConfigured: (value) => set({ apiKeyConfigured: value }),
             setAccessToken: (token) => set({ accessToken: token }),
             setHasSignedIn: (value) => set({ hasSignedIn: value }),
             cacheTranscript: (videoId, result) =>
@@ -199,13 +201,17 @@ export const useStore = create<StoreState>()(
         }),
         {
             name: 'digest-store',
-            version: 2,
+            version: 3,
             // Persist everything except the short-lived access token (kept in memory only).
             partialize: ({ accessToken: _omit, ...rest }) => rest,
             // v2 dropped the in-browser `oauthClientId` (OAuth moved to a server-side worker).
+            // v3 dropped the in-browser `apiKey` (now a server-side HttpOnly cookie) — delete the
+            // stale secret from localStorage; the user re-enters it once to set the cookie.
             migrate: (persisted) => {
                 if (persisted && typeof persisted === 'object') {
-                    delete (persisted as Record<string, unknown>).oauthClientId
+                    const data = persisted as Record<string, unknown>
+                    delete data.oauthClientId
+                    delete data.apiKey
                 }
                 return persisted as StoreState
             },

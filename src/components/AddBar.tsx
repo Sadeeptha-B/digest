@@ -15,7 +15,7 @@ import { createId } from '../lib/id'
 import type { Playlist } from '../types'
 
 export function AddBar() {
-    const apiKey = useStore((s) => s.apiKey)
+    const apiKeyConfigured = useStore((s) => s.apiKeyConfigured)
     const accessToken = useStore((s) => s.accessToken)
     const hasSignedIn = useStore((s) => s.hasSignedIn)
     const upsertVideos = useStore((s) => s.upsertVideos)
@@ -35,12 +35,13 @@ export function AddBar() {
     const signedIn = hasSignedIn || tokenIsValid(accessToken)
     const reauthMessage = 'Sign in again to access your private playlists.'
 
-    /** Ensure a valid token if the user has signed in; otherwise fetch anonymously. */
+    /** Ensure a valid token if the user has signed in; otherwise fetch anonymously (the proxy
+     *  falls back to the server-side API key). */
     async function currentAuth(): Promise<Auth> {
-        if (!hasSignedIn && !accessToken) return { apiKey, token: null }
+        if (!hasSignedIn && !accessToken) return { token: null }
         const token = await getValidToken()
-        if (!token && !apiKey) throw new Error(reauthMessage)
-        return { apiKey, token: token?.value ?? null }
+        if (!token && !apiKeyConfigured) throw new Error(reauthMessage)
+        return { token: token?.value ?? null }
     }
 
     async function importPlaylist(playlistId: string, auth: Auth) {
@@ -72,7 +73,7 @@ export function AddBar() {
         if (err instanceof YouTubeApiError) {
             setError(
                 err.status === 403
-                    ? 'Request rejected (403). Check the API key and its referrer restrictions.'
+                    ? 'Request rejected (403). Check the API key and its restrictions in Google Cloud.'
                     : err.message,
             )
         } else {

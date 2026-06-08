@@ -4,17 +4,16 @@
     <meta charset="UTF-8" />
     <!--
       Content-Security-Policy. Limits where scripts/connections/frames can come from so an
-      injected script can't exfiltrate the in-memory OAuth token or the stored API key.
-      OAuth runs through same-origin Pages Functions (/auth/*, covered by 'self') and the Google
-      consent screen opens in a popup window (not an iframe), so no accounts.google.com allowance
-      is needed. Allowances: the YouTube IFrame Player API (www.youtube.com), the YouTube Data
-      API (www.googleapis.com), the privacy-enhanced embed (youtube-nocookie.com), and thumbnail
-      hosts (ytimg/ggpht). Prefer serving this as a real HTTP header in production (see
-      public/_headers); the meta tag is the fallback.
+      injected script can't exfiltrate the in-memory OAuth token. OAuth and the YouTube Data API
+      both run through same-origin Pages Functions (/auth/*, /api/* — covered by 'self'), and the
+      Google consent screen opens in a popup window (not an iframe), so no external connect-src or
+      frame-src for Google is needed. Allowances: the YouTube IFrame Player API (www.youtube.com),
+      the privacy-enhanced embed (youtube-nocookie.com), and thumbnail hosts (ytimg/ggpht). Prefer
+      serving this as a real HTTP header in production (see public/_headers); the meta is fallback.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://www.youtube.com; connect-src 'self' https://www.googleapis.com; frame-src https://www.youtube-nocookie.com; img-src 'self' data: https://*.ytimg.com https://*.ggpht.com; style-src 'self' 'unsafe-inline'; base-uri 'self'; object-src 'none'; form-action 'self'"
+      content="default-src 'self'; script-src 'self' https://www.youtube.com; connect-src 'self'; frame-src https://www.youtube-nocookie.com; img-src 'self' data: https://*.ytimg.com https://*.ggpht.com; style-src 'self' 'unsafe-inline'; base-uri 'self'; object-src 'none'; form-action 'self'"
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

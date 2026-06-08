@@ -32,6 +32,24 @@ export const VERIFIER_COOKIE = 'digest_oauth_verifier'
 // revoked or unused for 6 months, so re-pin the cookie for ~180 days on each issue.
 export const REFRESH_MAX_AGE = 60 * 60 * 24 * 180
 
+import { expireCookie, serializeCookie } from './http'
+
+// Re-export the generic helpers so the existing OAuth functions can keep importing from here.
+export { json, parseCookies } from './http'
+
+/** OAuth cookie at the default /auth path (override `path` for other scopes). */
+export function cookie(
+    name: string,
+    value: string,
+    opts: { maxAge?: number; path?: string; sameSite?: 'Lax' | 'Strict' | 'None' } = {},
+): string {
+    return serializeCookie(name, value, { path: COOKIE_PATH, ...opts })
+}
+
+export function clearCookie(name: string, path = COOKIE_PATH): string {
+    return expireCookie(name, path)
+}
+
 function base64url(bytes: ArrayBuffer | Uint8Array): string {
     const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
     let str = ''
@@ -48,41 +66,6 @@ export function randomToken(bytes = 32): string {
 export async function pkceChallenge(verifier: string): Promise<string> {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
     return base64url(digest)
-}
-
-interface CookieOptions {
-    maxAge?: number
-    path?: string
-    sameSite?: 'Lax' | 'Strict' | 'None'
-}
-
-export function cookie(name: string, value: string, opts: CookieOptions = {}): string {
-    const { maxAge, path = COOKIE_PATH, sameSite = 'Lax' } = opts
-    let s = `${name}=${encodeURIComponent(value)}; Path=${path}; SameSite=${sameSite}; HttpOnly; Secure`
-    if (maxAge !== undefined) s += `; Max-Age=${maxAge}`
-    return s
-}
-
-export function clearCookie(name: string, path = COOKIE_PATH): string {
-    return `${name}=; Path=${path}; Max-Age=0; SameSite=Lax; HttpOnly; Secure`
-}
-
-export function parseCookies(header: string | null): Record<string, string> {
-    const out: Record<string, string> = {}
-    if (!header) return out
-    for (const part of header.split(';')) {
-        const i = part.indexOf('=')
-        if (i < 0) continue
-        out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim())
-    }
-    return out
-}
-
-export function json(body: unknown, init: ResponseInit = {}): Response {
-    const headers = new Headers(init.headers)
-    headers.set('Content-Type', 'application/json; charset=utf-8')
-    headers.set('Cache-Control', 'no-store')
-    return new Response(JSON.stringify(body), { ...init, headers })
 }
 
 /**

@@ -1,10 +1,12 @@
 import type { Video } from '../types'
 
-export const API_BASE = 'https://www.googleapis.com/youtube/v3'
+// Calls go through the same-origin proxy (see /functions/api/youtube), which injects the OAuth
+// token or the stored API key server-side. The browser never sends credentials in the URL.
+export const API_BASE = '/api/youtube'
 
-/** Credentials for a Data API call. With a token, the signed-in account's private content resolves. */
+/** Credentials for a Data API call. With a token, the signed-in account's private content resolves;
+ *  otherwise the proxy falls back to the user's stored API key (public/unlisted content only). */
 export interface Auth {
-  apiKey: string
   token?: string | null
 }
 
@@ -46,10 +48,9 @@ function pickThumb(thumbs: Thumbnails | undefined): string {
 
 async function call<T>(path: string, params: Record<string, string>, auth: Auth): Promise<T> {
   const qs = new URLSearchParams({ ...params })
-  if (auth.apiKey) qs.set('key', auth.apiKey)
   const headers: Record<string, string> = {}
   if (auth.token) headers.Authorization = `Bearer ${auth.token}`
-  const res = await fetch(`${API_BASE}/${path}?${qs.toString()}`, { headers })
+  const res = await fetch(`${API_BASE}/${path}?${qs.toString()}`, { headers, credentials: 'same-origin' })
   if (!res.ok) throw await apiErrorFromResponse(res)
   return res.json() as Promise<T>
 }

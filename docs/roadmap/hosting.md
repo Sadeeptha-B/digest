@@ -3,14 +3,18 @@
 _Last updated: 2026-06-08_
 
 > **Status (2026-06-08):** Roadmap step 1 is **done** — the app moved off shared GitHub Pages to
-> **Cloudflare Pages** (isolated origin + real CSP header). A **thin serverless auth layer** (a
-> "broker" variant of step 4) is also **done**: Google sign-in now runs through Cloudflare Pages
-> Functions in [`functions/auth/`](../../functions/auth) using the OAuth Authorization Code flow.
-> The Google **client secret** and the **refresh token** live server-side (the refresh token in an
-> HttpOnly cookie); the browser still holds only a short-lived in-memory access token and calls the
-> YouTube Data API directly. (A *full* BFF that also proxies the API and removes the in-browser
-> access token + `localStorage` API key remains the next increment.) See the README's
-> "Deploying to Cloudflare Pages" for setup.
+> **Cloudflare Pages** (isolated origin + real CSP header). A **serverless BFF layer** (step 4) is
+> also largely **done**: both Google sign-in *and* all YouTube Data API calls now go through
+> Cloudflare Pages Functions ([`functions/auth/`](../../functions/auth),
+> [`functions/api/`](../../functions/api)). The Google **client secret** + **refresh token** and
+> the user's **API key** all live server-side in HttpOnly cookies; the only credential still in the
+> browser is the short-lived **access token** (kept in memory and forwarded to the API proxy).
+>
+> **Consequence for this guide:** the app now **requires a Functions backend** — there is no
+> longer a pure-static, backend-less deployment, so the "any static host works" / "Scenario 0 — no
+> backend" framing below is **historical** (it describes the pre-migration app). The live target is
+> Cloudflare Pages **with** Functions; a plain static host (GitHub Pages, S3, Netlify-static) can
+> no longer run the app. See the README's "Deploying to Cloudflare Pages" for setup.
 
 This document captures the hosting options for **Digest** and the trade-offs between them.
 It pairs with [`transcripts.md`](./transcripts.md) (which decides *how* transcripts are
@@ -25,8 +29,8 @@ fetched). Read this once to choose a deployment direction.
 
 ## 1. TL;DR
 
-- The SPA itself is trivial to host — any static host works. The real decisions are
-  **(a) origin isolation** between your apps and **(b) whether you run a backend, and if so,
+- _(Superseded — see Status above: the app now requires a Functions backend.)_ The real decisions
+  are **(a) origin isolation** between your apps and **(b) whether you run a backend, and if so,
   whether it's a home server or not.**
 - **The transcript backend cannot be cloud-serverless.** YouTube blocks datacenter IPs and
   Whisper needs real compute, so automated transcripts effectively require a **home server**

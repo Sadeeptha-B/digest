@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useStore } from '../store/useStore'
 import { isOAuthConfigured } from '../lib/oauth'
 import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
+import { useApiKey } from '../hooks/useApiKey'
 
 /**
  * First-run onboarding. Two ways in:
@@ -10,10 +10,10 @@ import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
  *  - Use a public API key — read-only access to public/unlisted content, no sign-in.
  */
 export function ApiKeyGate() {
-    const setApiKey = useStore((s) => s.setApiKey)
     const [showKey, setShowKey] = useState(false)
     const [key, setKey] = useState('')
     const { busy, error, start: handleSignIn } = useGoogleSignIn()
+    const { busy: keyBusy, error: keyError, save: saveKey } = useApiKey()
 
     const oauth = isOAuthConfigured()
 
@@ -84,16 +84,17 @@ export function ApiKeyGate() {
                                 → <span className="text-zinc-200">Create credentials → API key</span>.
                             </li>
                             <li>
-                                Restrict the key by <span className="text-zinc-200">HTTP referrer</span> (this
-                                app's URL) and paste it below.
+                                Restrict the key to the{' '}
+                                <span className="text-zinc-200">YouTube Data API v3</span> (API restriction)
+                                and paste it below.
                             </li>
                         </ol>
 
                         <form
                             className="mt-3 flex gap-2"
-                            onSubmit={(e) => {
+                            onSubmit={async (e) => {
                                 e.preventDefault()
-                                if (key.trim()) setApiKey(key)
+                                if (key.trim()) await saveKey(key)
                             }}
                         >
                             <input
@@ -102,16 +103,18 @@ export function ApiKeyGate() {
                                 value={key}
                                 onChange={(e) => setKey(e.target.value)}
                                 placeholder="AIza…"
-                                className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
+                                disabled={keyBusy}
+                                className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500 disabled:opacity-50"
                             />
                             <button
                                 type="submit"
-                                disabled={!key.trim()}
+                                disabled={keyBusy || !key.trim()}
                                 className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
                             >
-                                Save
+                                {keyBusy ? 'Checking…' : 'Save'}
                             </button>
                         </form>
+                        {keyError && <p className="mt-2 text-sm text-rose-400">{keyError}</p>}
                     </>
                 )}
             </div>
