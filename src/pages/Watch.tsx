@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import YouTube, { type YouTubeEvent, type YouTubePlayer } from 'react-youtube'
 import { useStore } from '../store/useStore'
-import { Queue } from '../components/Queue'
 import { TranscriptPanel } from '../components/TranscriptPanel'
 import { SessionStatsPanel } from '../components/SessionStatsPanel'
+import { FocusPanel } from '../components/focus/FocusPanel'
 import { PomodoroTimeline } from '../components/PomodoroTimeline'
 import { usePomodoro } from '../hooks/usePomodoro'
 import { BackIcon } from '../components/Icons'
 
-type Tab = 'queue' | 'transcript' | 'stats'
+type Tab = 'transcript' | 'stats' | 'calm'
 
 // Videos longer than this (seconds) get a Pomodoro focus timeline.
 const POMODORO_MIN_DURATION = 15 * 60
@@ -26,11 +26,12 @@ export function Watch() {
 
   const playlist = useStore((s) => s.playlists.find((p) => p.id === listId))
   const video = useStore((s) => s.videos[videoId])
-  const [tab, setTab] = useState<Tab>('queue')
+  const [tab, setTab] = useState<Tab>('transcript')
   const setWatched = useStore((s) => s.setWatched)
   const setPosition = useStore((s) => s.setPosition)
   const getNextVideoId = useStore((s) => s.getNextVideoId)
   const pomodoroLengthMin = useStore((s) => s.settings.pomodoroLengthMin)
+  const pomodoroResetThresholdMin = useStore((s) => s.settings.pomodoroResetThresholdMin ?? 5)
 
   const playerRef = useRef<YouTubePlayer | null>(null)
   // keep the latest videoId for the polling interval's closure
@@ -78,6 +79,7 @@ export function Watch() {
     playerRef,
     durationSec,
     pomodoroLengthSec: pomodoroLengthMin * 60,
+    resetThresholdSec: pomodoroResetThresholdMin * 60,
     enabled: pomodoroEnabled,
     onSessionEnd: finishVideo,
   })
@@ -205,29 +207,22 @@ export function Watch() {
 
       <aside className="flex flex-col rounded-xl border border-ink-700 bg-ink-900/40 p-3 lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
         <div className="mb-2 flex gap-1 border-b border-ink-800">
-          {playlist && (
-            <TabButton active={tab === 'queue'} onClick={() => setTab('queue')}>
-              Up next
-            </TabButton>
-          )}
-          <TabButton
-            active={tab === 'transcript' || (!playlist && tab !== 'stats')}
-            onClick={() => setTab('transcript')}
-          >
+          <TabButton active={tab === 'transcript'} onClick={() => setTab('transcript')}>
             Transcript
           </TabButton>
           <TabButton active={tab === 'stats'} onClick={() => setTab('stats')}>
-            Session Stats
+            Stats
+          </TabButton>
+          <TabButton active={tab === 'calm'} onClick={() => setTab('calm')}>
+            Calm
           </TabButton>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
-          {tab === 'queue' && playlist ? (
-            <div className="h-full overflow-y-auto no-scrollbar">
-              <Queue videoIds={playlist.videoIds} currentVideoId={videoId} listId={playlist.id} />
-            </div>
-          ) : tab === 'stats' ? (
+          {tab === 'stats' ? (
             <SessionStatsPanel video={video} />
+          ) : tab === 'calm' ? (
+            <FocusPanel />
           ) : (
             <TranscriptPanel video={video} playerRef={playerRef} />
           )}

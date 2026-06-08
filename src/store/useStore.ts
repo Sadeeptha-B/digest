@@ -3,12 +3,14 @@ import { persist } from 'zustand/middleware'
 import {
     SAVED_VIDEOS_ID,
     type AccessToken,
+    type FocusNote,
     type Playlist,
     type PomodoroEvent,
     type Progress,
     type TranscriptResult,
     type Video,
 } from '../types'
+import { DEFAULT_ACCENT_THEME, type AccentTheme } from '../lib/themes'
 
 interface StoreState {
     /** Whether a YouTube API key is configured. The key itself lives in a server-side HttpOnly
@@ -27,9 +29,17 @@ interface StoreState {
     transcripts: Record<string, TranscriptResult>
 
     /** user-configurable preferences */
-    settings: { pomodoroLengthMin: number }
+    settings: {
+        pomodoroLengthMin: number
+        /** Pausing within the first N minutes of a block resets it; later pauses just hold. */
+        pomodoroResetThresholdMin: number
+        accentTheme: AccentTheme
+        userName: string
+    }
     /** Pomodoro focus-session event logs keyed by videoId */
     pomodoroSessions: Record<string, PomodoroEvent[]>
+    /** Brain-dump parking lot — intrusive thoughts to revisit later */
+    focusNotes: FocusNote[]
 
     setApiKeyConfigured: (value: boolean) => void
     setAccessToken: (token: AccessToken | null) => void
@@ -37,7 +47,14 @@ interface StoreState {
     cacheTranscript: (videoId: string, result: TranscriptResult) => void
     clearTranscript: (videoId: string) => void
 
+    addFocusNote: (text: string) => void
+    removeFocusNote: (id: string) => void
+    clearFocusNotes: () => void
+
     setPomodoroLength: (min: number) => void
+    setPomodoroResetThreshold: (min: number) => void
+    setAccentTheme: (theme: AccentTheme) => void
+    setUserName: (name: string) => void
     logPomodoroEvent: (videoId: string, event: PomodoroEvent) => void
     clearPomodoroSession: (videoId: string) => void
 
@@ -70,8 +87,14 @@ const initialData = {
     accessToken: null as AccessToken | null,
     hasSignedIn: false,
     transcripts: {} as Record<string, TranscriptResult>,
-    settings: { pomodoroLengthMin: 25 },
+    settings: {
+        pomodoroLengthMin: 25,
+        pomodoroResetThresholdMin: 5,
+        accentTheme: DEFAULT_ACCENT_THEME,
+        userName: '',
+    },
     pomodoroSessions: {} as Record<string, PomodoroEvent[]>,
+    focusNotes: [] as FocusNote[],
 }
 
 function mergePlaylist(existing: Playlist | undefined, incoming: Playlist): Playlist {
@@ -117,6 +140,10 @@ export const useStore = create<StoreState>()(
                 }),
 
             setPomodoroLength: (min) => set((s) => ({ settings: { ...s.settings, pomodoroLengthMin: min } })),
+            setPomodoroResetThreshold: (min) =>
+                set((s) => ({ settings: { ...s.settings, pomodoroResetThresholdMin: min } })),
+            setAccentTheme: (theme) => set((s) => ({ settings: { ...s.settings, accentTheme: theme } })),
+            setUserName: (name) => set((s) => ({ settings: { ...s.settings, userName: name } })),
             logPomodoroEvent: (videoId, event) =>
                 set((s) => ({
                     pomodoroSessions: {
@@ -130,6 +157,21 @@ export const useStore = create<StoreState>()(
                     delete pomodoroSessions[videoId]
                     return { pomodoroSessions }
                 }),
+
+            addFocusNote: (text) =>
+                set((s) => {
+                    const trimmed = text.trim()
+                    if (!trimmed) return s
+                    const note: FocusNote = {
+                        id: (crypto.randomUUID?.() ?? String(Date.now())),
+                        text: trimmed,
+                        at: Date.now(),
+                    }
+                    return { focusNotes: [note, ...s.focusNotes] }
+                }),
+            removeFocusNote: (id) =>
+                set((s) => ({ focusNotes: s.focusNotes.filter((n) => n.id !== id) })),
+            clearFocusNotes: () => set({ focusNotes: [] }),
 
             upsertVideos: (incoming) =>
                 set((s) => {
@@ -228,17 +270,26 @@ export const useStore = create<StoreState>()(
         }),
         {
             name: 'digest-store',
-            version: 3,
+            version: 5,
             // Persist everything except the short-lived access token (kept in memory only).
             partialize: ({ accessToken: _omit, ...rest }) => rest,
             // v2 dropped the in-browser `oauthClientId` (OAuth moved to a server-side worker).
             // v3 dropped the in-browser `apiKey` (now a server-side HttpOnly cookie) — delete the
             // stale secret from localStorage; the user re-enters it once to set the cookie.
+            // v4 added settings.accentTheme; v5 added settings.pomodoroResetThresholdMin —
+            // backfill both on older state.
             migrate: (persisted) => {
                 if (persisted && typeof persisted === 'object') {
                     const data = persisted as Record<string, unknown>
                     delete data.oauthClientId
                     delete data.apiKey
+                    const settings = (data.settings ?? {}) as Record<string, unknown>
+                    if (!settings.accentTheme) settings.accentTheme = DEFAULT_ACCENT_THEME
+                    if (typeof settings.userName !== 'string') settings.userName = ''
+                    if (typeof settings.pomodoroResetThresholdMin !== 'number') {
+                        settings.pomodoroResetThresholdMin = 5
+                    }
+                    data.settings = settings
                 }
                 return persisted as StoreState
             },

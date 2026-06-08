@@ -11,15 +11,148 @@
   body {
     @apply bg-ink-950 text-zinc-200 antialiased;
   }
+
+  /* Accent palettes — values are space-separated RGB channels so Tailwind's
+     rgb(var(--x) / <alpha-value>) can apply opacity modifiers. The default
+     (indigo) lives on :root; [data-theme] on <html> swaps the whole brand.
+     `accent` = focus tone, `rest` = break tone (cool/warm flips per theme). */
+  :root,
+  [data-theme='indigo'] {
+    --accent-300: 179 189 242;
+    --accent-400: 139 151 232;
+    --accent-500: 100 112 214;
+    --accent-600: 79 89 184;
+    --accent-700: 61 70 144;
+    --rest-300: 243 201 138;
+    --rest-400: 240 179 94;
+    --rest-500: 224 154 62;
+  }
+
+  [data-theme='teal'] {
+    --accent-300: 143 214 207;
+    --accent-400: 92 194 184;
+    --accent-500: 58 168 157;
+    --accent-600: 44 134 126;
+    --accent-700: 36 106 100;
+    --rest-300: 243 201 138;
+    --rest-400: 240 179 94;
+    --rest-500: 224 154 62;
+  }
+
+  [data-theme='slate'] {
+    --accent-300: 170 184 204;
+    --accent-400: 126 145 173;
+    --accent-500: 94 114 144;
+    --accent-600: 74 91 117;
+    --accent-700: 58 71 92;
+    --rest-300: 243 201 138;
+    --rest-400: 240 179 94;
+    --rest-500: 224 154 62;
+  }
+
+  /* Terracotta inverts the scheme: warm focus, cool (slate) break. */
+  [data-theme='terracotta'] {
+    --accent-300: 232 181 158;
+    --accent-400: 217 144 111;
+    --accent-500: 196 113 79;
+    --accent-600: 163 89 60;
+    --accent-700: 130 69 47;
+    --rest-300: 170 184 204;
+    --rest-400: 126 145 173;
+    --rest-500: 94 114 144;
+  }
+}
+
+@layer base {
+  /* Modern, unobtrusive scrollbar for the main page — replaces the chunky native one.
+     A transparent track with a faint pill thumb that brightens on hover; theme-agnostic
+     (white at low alpha) so it reads on every accent palette. */
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+  }
+  html::-webkit-scrollbar {
+    width: 12px;
+  }
+  html::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  html::-webkit-scrollbar-thumb {
+    background-color: rgb(255 255 255 / 0.14);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  html::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(255 255 255 / 0.26);
+  }
 }
 
 @layer utilities {
-  /* Hide scrollbars but keep scrolling for the queue/lists */
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
+  /* Thinner variant of the page scrollbar, for in-app scroll containers (panels, lists). */
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.16) transparent;
   }
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    background-color: rgb(255 255 255 / 0.12);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  .scrollbar-slim::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(255 255 255 / 0.24);
+  }
+}
+
+/* Ambient blob drift (AmbientBlob widget). Long, offset cycles so motion stays calm. */
+@keyframes blob-a {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(40%, 30%) scale(1.25);
+  }
+}
+@keyframes blob-b {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1.1);
+  }
+  50% {
+    transform: translate(-30%, 40%) scale(0.85);
+  }
+}
+@keyframes blob-c {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-40%, -30%) scale(1.2);
+  }
+}
+.animate-blob-a {
+  animation: blob-a 22s ease-in-out infinite;
+}
+.animate-blob-b {
+  animation: blob-b 29s ease-in-out infinite;
+}
+.animate-blob-c {
+  animation: blob-c 35s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-blob-a,
+  .animate-blob-b,
+  .animate-blob-c {
+    animation: none;
   }
 }

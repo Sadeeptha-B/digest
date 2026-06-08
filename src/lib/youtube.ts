@@ -117,6 +117,23 @@ export async function listMyPlaylists(auth: Auth): Promise<MyPlaylist[]> {
   return out
 }
 
+interface ChannelsListResponse {
+  items?: Array<{ snippet?: { title?: string } }>
+}
+
+/**
+ * channels.list?mine=true — 1 quota unit. Returns the signed-in account's channel title,
+ * used to prefill the user's display name. Requires a token; '' if unavailable.
+ */
+export async function fetchMyChannelTitle(auth: Auth): Promise<string> {
+  const data = await call<ChannelsListResponse>(
+    'channels',
+    { part: 'snippet', mine: 'true', maxResults: '1' },
+    auth,
+  )
+  return data.items?.[0]?.snippet?.title ?? ''
+}
+
 interface PlaylistItemsResponse {
   nextPageToken?: string
   items: Array<{

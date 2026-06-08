@@ -8,7 +8,7 @@ import { isCrossSite, json } from '../../_lib/http'
 // Only a fixed set of read endpoints is allowed, so the proxy can't be used as an open relay.
 
 const UPSTREAM = 'https://www.googleapis.com/youtube/v3'
-const ALLOWED_RESOURCES = new Set(['playlists', 'playlistItems', 'videos'])
+const ALLOWED_RESOURCES = new Set(['playlists', 'playlistItems', 'videos', 'channels'])
 
 export const onRequest: PagesFunction = async ({ request, params }) => {
     if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, { status: 405 })

@@ -8,7 +8,7 @@ const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public')
 
 const BG = '#0a0a0b'
 // Keep in sync with the `accent-400` token in tailwind.config.js.
-const FG = '#7faf93'
+const FG = '#8b97e8'
 
 // "any" icon: rounded square with a play glyph (transparent corners).
 const anySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">

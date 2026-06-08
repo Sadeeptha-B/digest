@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useStore } from './store/useStore'
-import { getValidToken } from './lib/oauth'
+import { getValidToken, tokenIsValid } from './lib/oauth'
 import { refreshApiKeyStatus } from './lib/apiKey'
+import { fetchMyChannelTitle } from './lib/youtube'
 import { Layout } from './components/Layout'
 import { ApiKeyGate } from './components/ApiKeyGate'
 import { Library } from './pages/Library'
@@ -13,6 +14,8 @@ export default function App() {
     const apiKeyConfigured = useStore((s) => s.apiKeyConfigured)
     const hasSignedIn = useStore((s) => s.hasSignedIn)
     const hasLibrary = useStore((s) => s.playlists.length > 0)
+    const accessToken = useStore((s) => s.accessToken)
+    const userName = useStore((s) => s.settings.userName)
     const [apiKeyStatusReady, setApiKeyStatusReady] = useState(hasSignedIn)
 
     // The token isn't persisted; if the user signed in before, silently restore it from the
@@ -37,6 +40,18 @@ export default function App() {
             cancelled = true
         }
     }, [hasSignedIn])
+
+    // Prefill the display name from the signed-in account's YouTube channel title, but only when
+    // the user hasn't set one — so it stays overridable from Settings.
+    useEffect(() => {
+        if (userName || !accessToken || !tokenIsValid(accessToken)) return
+        const token = accessToken.value
+        void fetchMyChannelTitle({ token })
+            .then((name) => {
+                if (name) useStore.getState().setUserName(name)
+            })
+            .catch(() => { })
+    }, [accessToken, userName])
 
     // An existing library needs no credentials to view (playlists/videos are in localStorage and
     // the player is a plain IFrame embed), so let those users straight in. Only when the library is

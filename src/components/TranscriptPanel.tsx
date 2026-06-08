@@ -174,7 +174,7 @@ export function TranscriptPanel({
         </button>
       </div>
       <div className="relative min-h-0 flex-1">
-        <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto no-scrollbar">
+        <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto scrollbar-slim">
         {filtered.length === 0 ? (
           <p className="px-1 py-2 text-sm text-zinc-500">No matching lines.</p>
         ) : (

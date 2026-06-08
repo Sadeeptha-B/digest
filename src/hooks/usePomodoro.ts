@@ -19,6 +19,7 @@ export type PomodoroPhase =
   | 'onrampPaused'
   | 'work'
   | 'workPaused'
+  | 'workHeld'
   | 'break'
   | 'offramp'
   | 'done'
@@ -33,6 +34,8 @@ export interface PomodoroView {
   activeIndex: number
   /** seconds left in the active work block */
   activeRemainingSec: number
+  /** full length of the active work block, for rendering fill progress */
+  activeBlockLenSec: number
   /** seconds left in the current break */
   breakRemainingSec: number
   /** seconds left in an onramp/offramp countdown */
@@ -45,6 +48,7 @@ const INITIAL_VIEW: PomodoroView = {
   totalCount: 0,
   activeIndex: -1,
   activeRemainingSec: 0,
+  activeBlockLenSec: 0,
   breakRemainingSec: 0,
   rampRemainingSec: 0,
 }
@@ -54,6 +58,8 @@ interface Params {
   playerRef: RefObject<YouTubePlayer | null>
   durationSec: number
   pomodoroLengthSec: number
+  /** Pausing with less than this much focus elapsed in the block resets it; at/above, it holds. */
+  resetThresholdSec: number
   enabled: boolean
   /** called once the offramp finishes, so Watch can mark watched + advance */
   onSessionEnd: () => void
@@ -72,6 +78,7 @@ export function usePomodoro({
   playerRef,
   durationSec,
   pomodoroLengthSec,
+  resetThresholdSec,
   enabled,
   onSessionEnd,
 }: Params) {
@@ -87,6 +94,8 @@ export function usePomodoro({
   const phaseStartRef = useRef(0) // wall ms when the current onramp/break/offramp began
   const rampAccumRef = useRef(0) // onramp seconds accumulated across pause/resume
   const workStartRef = useRef(0) // wall ms when the current work stretch began
+  const holdStartRef = useRef(0) // wall ms when the current hold (workHeld) began
+  const blockHeldMsRef = useRef(0) // total held ms in the current block, excluded from the stretch
   const lastTimeRef = useRef(0) // most recent content time read, for projecting totals
   // Programmatic pauses land in a phase that already ignores PAUSED, but a late event can race
   // a fast user action; swallow PAUSED briefly after we pause the player ourselves.
@@ -119,10 +128,18 @@ export function usePomodoro({
         break
       case 'work':
       case 'workPaused':
+      case 'workHeld':
         v.totalCount = projectTotal(blockStartRef.current, done)
         v.activeIndex = done
         v.activeRemainingSec =
           opts.activeRemainingSec ?? Math.max(0, blockEndRef.current - blockStartRef.current)
+        // A reset shows a full (fresh) block; an active/held block shows real progress.
+        v.activeBlockLenSec = Math.max(
+          1,
+          phase === 'workPaused'
+            ? pomodoroLengthSec
+            : blockEndRef.current - blockStartRef.current,
+        )
         break
       case 'break':
         v.totalCount = projectTotal(nextAnchorRef.current, done)
@@ -176,10 +193,15 @@ export function usePomodoro({
     show('onramp', { rampRemainingSec: ONRAMP_SEC })
   }
 
+  // Focused duration of the current stretch, excluding any time it was held (paused).
+  const stretchSeconds = () =>
+    Math.max(0, Math.round((Date.now() - workStartRef.current - blockHeldMsRef.current) / 1000))
+
   function startWork(anchorSec: number) {
     blockStartRef.current = anchorSec
     blockEndRef.current = Math.min(anchorSec + pomodoroLengthSec, durationSec)
     workStartRef.current = Date.now()
+    blockHeldMsRef.current = 0
     phaseRef.current = 'work'
     log('work-start', { index: doneRef.current })
     playVideo()
@@ -187,7 +209,7 @@ export function usePomodoro({
   }
 
   function startBreak() {
-    const stretchSec = Math.round((Date.now() - workStartRef.current) / 1000)
+    const stretchSec = stretchSeconds()
     log('work-complete', { index: doneRef.current, stretchSec })
     nextAnchorRef.current = blockEndRef.current
     doneRef.current += 1
@@ -207,8 +229,8 @@ export function usePomodoro({
   function startOfframp() {
     const p = phaseRef.current
     if (p === 'offramp' || p === 'done' || p === 'idle') return
-    if (p === 'work') {
-      const stretchSec = Math.round((Date.now() - workStartRef.current) / 1000)
+    if (p === 'work' || p === 'workHeld') {
+      const stretchSec = stretchSeconds()
       log('work-complete', { index: doneRef.current, stretchSec })
       doneRef.current += 1
     }
@@ -227,22 +249,44 @@ export function usePomodoro({
     onSessionEnd()
   }
 
-  // Forfeit the current work block. `viaNative` = the user paused via the YouTube controls
-  // (video already paused); otherwise we pause it ourselves.
+  // Pause the current work block. `viaNative` = the user paused via the YouTube controls
+  // (video already paused); otherwise we pause it ourselves. How much focus has accrued in the
+  // block decides what happens: under the threshold it's forfeited (reset, restart fresh on
+  // resume); at/above it's just held (the remaining time is preserved and the same block resumes).
   function pauseWork(viaNative: boolean) {
     if (phaseRef.current !== 'work') return
-    const stretchSec = Math.round((Date.now() - workStartRef.current) / 1000)
-    log('pause-reset', { index: doneRef.current, stretchSec })
-    phaseRef.current = 'workPaused'
+    const stretchSec = stretchSeconds()
+    const elapsedSec = Math.max(0, lastTimeRef.current - blockStartRef.current)
     if (!viaNative) pauseVideo()
-    show('workPaused', { activeRemainingSec: pomodoroLengthSec })
+
+    if (elapsedSec < resetThresholdSec) {
+      log('pause-reset', { index: doneRef.current, stretchSec })
+      phaseRef.current = 'workPaused'
+      show('workPaused', { activeRemainingSec: pomodoroLengthSec })
+    } else {
+      log('pause-hold', { index: doneRef.current, stretchSec })
+      holdStartRef.current = Date.now()
+      phaseRef.current = 'workHeld'
+      show('workHeld', { activeRemainingSec: Math.max(0, blockEndRef.current - lastTimeRef.current) })
+    }
   }
 
+  // Resume after a reset: a fresh full block from the current position.
   async function resumeWork() {
     if (phaseRef.current !== 'workPaused') return
     const t = await readTime()
     log('resume', { index: doneRef.current })
-    startWork(t) // fresh full block from the current position
+    startWork(t)
+  }
+
+  // Resume after a hold: continue the same block where it left off (remaining time preserved).
+  function resumeHeld() {
+    if (phaseRef.current !== 'workHeld') return
+    blockHeldMsRef.current += Date.now() - holdStartRef.current
+    log('resume', { index: doneRef.current })
+    phaseRef.current = 'work'
+    playVideo()
+    show('work', { activeRemainingSec: Math.max(0, blockEndRef.current - lastTimeRef.current) })
   }
 
   function pauseOnramp() {
@@ -268,6 +312,7 @@ export function usePomodoro({
   function resume() {
     const p = phaseRef.current
     if (p === 'workPaused') void resumeWork()
+    else if (p === 'workHeld') resumeHeld()
     else if (p === 'onrampPaused') resumeOnramp()
   }
 
@@ -282,6 +327,7 @@ export function usePomodoro({
       if (p === 'work') pauseWork(true)
     } else if (state === PLAYING) {
       if (p === 'workPaused') void resumeWork()
+      else if (p === 'workHeld') resumeHeld()
       else if (p === 'onramp' || p === 'onrampPaused') void readTime().then(startWork)
       else if (p === 'break') skipBreak()
     }

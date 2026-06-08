@@ -1,29 +1,45 @@
-import { Fragment } from 'react'
 import { fmt } from '../lib/time'
-import { CheckIcon, PauseIcon, PlayIcon, SkipIcon } from './Icons'
+import { PauseIcon, PlayIcon, SkipIcon } from './Icons'
 import type { PomodoroView } from '../hooks/usePomodoro'
 
 const secs = (n: number) => fmt(Math.ceil(Math.max(0, n)))
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
 
-type BlockStatus = 'done' | 'active' | 'paused' | 'upcoming'
+type SegStatus = 'done' | 'active' | 'held' | 'paused' | 'next' | 'upcoming'
 
-/** A thin connector line between blocks, mirroring the timeline sketch. */
-function Line() {
-  return <div className="h-px flex-1 bg-ink-700" />
-}
+/**
+ * A single block rendered as a segment of the continuous progress bar. The active
+ * segment fills left-to-right in real time; a held segment keeps its fill but dims
+ * (the timer is paused, progress preserved); a reset (paused) segment is striped and
+ * empty; the segment that resumes after a break glows in the warm "rest" accent.
+ */
+function Segment({ status, fill }: { status: SegStatus; fill: number }) {
+  const track =
+    status === 'next'
+      ? 'bg-rest-400/15'
+      : status === 'paused'
+        ? 'bg-ink-700'
+        : 'bg-ink-800'
+  const ring =
+    status === 'active'
+      ? 'ring-1 ring-inset ring-accent-500/40'
+      : status === 'held'
+        ? 'ring-1 ring-inset ring-zinc-500/40'
+        : status === 'next'
+          ? 'ring-1 ring-inset ring-rest-400/40'
+          : ''
 
-function Block({ status, label }: { status: BlockStatus; label?: string }) {
-  const base =
-    'flex h-11 min-w-[60px] shrink-0 items-center justify-center rounded-xl border-2 px-3 font-mono text-sm'
-  const styles: Record<BlockStatus, string> = {
-    done: 'border-accent-600/50 bg-accent-600/20 text-accent-300',
-    active: 'border-accent-500 bg-accent-600/15 text-white ring-1 ring-accent-500',
-    paused: 'border-zinc-500 bg-ink-800 text-zinc-300',
-    upcoming: 'border-ink-700 text-zinc-600',
-  }
   return (
-    <div className={`${base} ${styles[status]}`}>
-      {status === 'done' ? <CheckIcon className="h-4 w-4" /> : label}
+    <div className={`relative h-2 flex-1 overflow-hidden rounded-full ${track} ${ring}`}>
+      <div
+        className={`absolute inset-y-0 left-0 rounded-full transition-[width] duration-300 ease-linear ${
+          status === 'done' ? 'bg-accent-600' : status === 'held' ? 'bg-accent-400/50' : 'bg-accent-400'
+        }`}
+        style={{ width: `${clamp01(fill) * 100}%` }}
+      />
+      {status === 'paused' && (
+        <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(255,255,255,0.06)_4px,rgba(255,255,255,0.06)_8px)]" />
+      )}
     </div>
   )
 }
@@ -39,131 +55,91 @@ export function PomodoroTimeline({
   onResume: () => void
   onSkipBreak: () => void
 }) {
-  const { phase, doneCount, totalCount, activeIndex, activeRemainingSec, breakRemainingSec } = view
+  const { phase, doneCount, totalCount, activeIndex, activeRemainingSec, activeBlockLenSec } = view
   const total = Math.max(totalCount, doneCount, 1)
+  const isBreak = phase === 'break'
+  // During a break, doneCount already counts the just-finished block, so the block
+  // that resumes next is at index `doneCount`.
+  const nextIndex = isBreak ? doneCount : -1
 
-  function statusFor(i: number): BlockStatus {
+  function statusFor(i: number): SegStatus {
     if (i < doneCount) return 'done'
     if (i === activeIndex && phase === 'work') return 'active'
+    if (i === activeIndex && phase === 'workHeld') return 'held'
     if (i === activeIndex && phase === 'workPaused') return 'paused'
+    if (i === nextIndex) return 'next'
     return 'upcoming'
   }
 
-  function labelFor(status: BlockStatus): string | undefined {
-    if (status === 'active') return secs(activeRemainingSec)
-    if (status === 'paused') return '↺'
-    return undefined
+  function fillFor(status: SegStatus): number {
+    if (status === 'done') return 1
+    if (status === 'active' || status === 'held') return 1 - activeRemainingSec / activeBlockLenSec
+    return 0
   }
-
-  // The break sits after the last completed block (between block doneCount-1 and doneCount).
-  const breakAfter = phase === 'break' ? doneCount - 1 : -1
 
   return (
     <div className="mt-3 rounded-xl border border-ink-700 bg-ink-900/40 px-4 py-3">
-      <div className="flex items-center gap-2">
-        <Line />
+      <Header view={view} />
+
+      <div className="mt-2.5 flex items-center gap-1.5">
         {Array.from({ length: total }).map((_, i) => {
           const status = statusFor(i)
-          return (
-            <Fragment key={i}>
-              <Block status={status} label={labelFor(status)} />
-              {i < total - 1 ? (
-                breakAfter === i ? (
-                  <div className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-zinc-400">
-                    <span className="h-px w-2 bg-ink-700" />
-                    <span className="rounded-full bg-ink-800 px-2 py-0.5 font-mono">
-                      ☕ {secs(breakRemainingSec)}
-                    </span>
-                    <span className="h-px w-2 bg-ink-700" />
-                  </div>
-                ) : (
-                  <Line />
-                )
-              ) : null}
-            </Fragment>
-          )
+          return <Segment key={i} status={status} fill={fillFor(status)} />
         })}
-        <Line />
       </div>
 
-      <StatusBar
-        view={view}
-        onPause={onPause}
-        onResume={onResume}
-        onSkipBreak={onSkipBreak}
-      />
+      <Controls view={view} onPause={onPause} onResume={onResume} onSkipBreak={onSkipBreak} />
     </div>
   )
 }
 
-function StatusBar({
-  view,
-  onPause,
-  onResume,
-  onSkipBreak,
-}: {
-  view: PomodoroView
-  onPause: () => void
-  onResume: () => void
-  onSkipBreak: () => void
-}) {
-  const { phase, doneCount, totalCount, activeRemainingSec, breakRemainingSec, rampRemainingSec } =
-    view
-
-  const secondary =
-    'flex items-center gap-1.5 rounded-lg border border-ink-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-ink-800'
-  const primary =
-    'flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-500'
+/** The headline row: a short phase label on the left, the hero countdown on the right. */
+function Header({ view }: { view: PomodoroView }) {
+  const {
+    phase,
+    doneCount,
+    totalCount,
+    activeRemainingSec,
+    breakRemainingSec,
+    rampRemainingSec,
+  } = view
 
   let label: React.ReactNode = null
-  let control: React.ReactNode = null
+  let time: string | null = null
+  let tone = 'text-white'
 
   switch (phase) {
     case 'onramp':
-      label = <>Get ready — starting in {secs(rampRemainingSec)}s</>
-      control = (
-        <button onClick={onPause} className={secondary}>
-          <PauseIcon className="h-3.5 w-3.5" /> Pause
-        </button>
-      )
+      label = <span className="text-zinc-400">Get ready</span>
+      time = secs(rampRemainingSec)
       break
     case 'onrampPaused':
       label = <span className="text-zinc-400">Paused before start</span>
-      control = (
-        <button onClick={onResume} className={primary}>
-          <PlayIcon className="h-3.5 w-3.5" /> Resume
-        </button>
-      )
+      time = secs(rampRemainingSec)
+      tone = 'text-zinc-500'
       break
     case 'work':
       label = (
-        <>
-          Focus block {doneCount + 1} of {totalCount} — {secs(activeRemainingSec)} left
-        </>
+        <span className="text-accent-300">
+          Focus · block {doneCount + 1} of {totalCount}
+        </span>
       )
-      control = (
-        <button onClick={onPause} className={secondary}>
-          <PauseIcon className="h-3.5 w-3.5" /> Pause
-        </button>
-      )
+      time = secs(activeRemainingSec)
+      break
+    case 'workHeld':
+      label = <span className="text-zinc-300">Paused — progress held</span>
+      time = secs(activeRemainingSec)
+      tone = 'text-zinc-400'
       break
     case 'workPaused':
-      label = (
-        <span className="text-amber-400">Block reset — resume to start a fresh block from here</span>
-      )
-      control = (
-        <button onClick={onResume} className={primary}>
-          <PlayIcon className="h-3.5 w-3.5" /> Resume
-        </button>
-      )
+      label = <span className="text-rest-300">Block reset — resume for a fresh block</span>
+      time = secs(activeRemainingSec)
+      tone = 'text-zinc-500'
       break
     case 'break':
-      label = <>Break — {secs(breakRemainingSec)} left</>
-      control = (
-        <button onClick={onSkipBreak} className={primary}>
-          <SkipIcon className="h-3.5 w-3.5" /> Skip break
-        </button>
-      )
+      label = <span className="text-rest-300">☕ Break</span>
+      time = secs(breakRemainingSec)
+      tone = 'text-rest-300'
       break
     case 'offramp':
       label = <span className="text-zinc-400">Wrapping up…</span>
@@ -176,9 +152,65 @@ function StatusBar({
   }
 
   return (
-    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-zinc-400">
-      <span className="min-w-0 truncate">{label}</span>
-      {control}
+    <div className="flex items-end justify-between gap-3">
+      <span className="min-w-0 truncate text-sm font-medium">{label}</span>
+      {time && (
+        <span className={`shrink-0 font-mono text-2xl leading-none tabular-nums ${tone}`}>
+          {time}
+        </span>
+      )}
     </div>
   )
+}
+
+/** Right-aligned primary control, varying by phase. */
+function Controls({
+  view,
+  onPause,
+  onResume,
+  onSkipBreak,
+}: {
+  view: PomodoroView
+  onPause: () => void
+  onResume: () => void
+  onSkipBreak: () => void
+}) {
+  const secondary =
+    'flex items-center gap-1.5 rounded-lg border border-ink-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-ink-800'
+  const primary =
+    'flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-500'
+  const rest =
+    'flex items-center gap-1.5 rounded-lg bg-rest-500 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-rest-400'
+
+  let control: React.ReactNode = null
+  switch (view.phase) {
+    case 'onramp':
+    case 'work':
+      control = (
+        <button onClick={onPause} className={secondary}>
+          <PauseIcon className="h-3.5 w-3.5" /> Pause
+        </button>
+      )
+      break
+    case 'onrampPaused':
+    case 'workPaused':
+    case 'workHeld':
+      control = (
+        <button onClick={onResume} className={primary}>
+          <PlayIcon className="h-3.5 w-3.5" /> Resume
+        </button>
+      )
+      break
+    case 'break':
+      control = (
+        <button onClick={onSkipBreak} className={rest}>
+          <SkipIcon className="h-3.5 w-3.5" /> Skip break
+        </button>
+      )
+      break
+    default:
+      return null
+  }
+
+  return <div className="mt-3 flex justify-end">{control}</div>
 }

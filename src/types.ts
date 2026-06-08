@@ -27,6 +27,13 @@ export interface Progress {
   updatedAt: number
 }
 
+/** A jotted intrusive thought from the brain-dump / parking-lot widget. */
+export interface FocusNote {
+  id: string
+  text: string
+  at: number
+}
+
 export interface TranscriptLine {
   startSec: number
   text: string
@@ -46,6 +53,7 @@ export type PomodoroEventType =
   | 'work-start'
   | 'work-complete'
   | 'pause-reset'
+  | 'pause-hold'
   | 'resume'
   | 'break-start'
   | 'break-skipped'
