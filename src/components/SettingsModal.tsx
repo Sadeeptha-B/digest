@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
-import { signOut, tokenIsValid } from '../lib/oauth'
+import { isOAuthConfigured, signOut, tokenIsValid } from '../lib/oauth'
 import { clearApiKey } from '../lib/apiKey'
 import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
 import { useApiKey } from '../hooks/useApiKey'
@@ -9,11 +9,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     const accessToken = useStore((s) => s.accessToken)
     const hasSignedIn = useStore((s) => s.hasSignedIn)
     const reset = useStore((s) => s.reset)
+    const pomodoroLengthMin = useStore((s) => s.settings.pomodoroLengthMin)
+    const setPomodoroLength = useStore((s) => s.setPomodoroLength)
 
     const [key, setKey] = useState('')
     const [showKey, setShowKey] = useState(false)
     const [confirmClear, setConfirmClear] = useState(false)
 
+    const oauthEnabled = isOAuthConfigured()
     const signedIn = hasSignedIn || tokenIsValid(accessToken)
     const { busy: authBusy, error: authError, start: handleSignIn } = useGoogleSignIn()
     const { configured: keyConfigured, busy: keyBusy, error: keyError, save: saveKey, remove: removeKey } = useApiKey()
@@ -36,37 +39,42 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             >
                 <h2 className="text-base font-medium text-white">Settings</h2>
 
-                {/* --- Google account --- */}
-                <label className="mt-4 block text-sm text-zinc-400">Google account</label>
-                <div className="mt-2 flex items-center gap-2">
-                    {signedIn ? (
-                        <>
-                            <span className="flex items-center gap-1.5 text-sm text-accent-400">
-                                <span className="h-2 w-2 rounded-full bg-accent-400" /> Signed in
-                            </span>
-                            <button
-                                onClick={() => signOut()}
-                                className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
-                            >
-                                Sign out
-                            </button>
-                        </>
-                    ) : (
-                        <button
-                            onClick={handleSignIn}
-                            disabled={authBusy}
-                            className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
-                        >
-                            {authBusy ? 'Signing in…' : 'Sign in with Google'}
-                        </button>
-                    )}
-                </div>
-                <p className="mt-1.5 text-xs text-zinc-500">
-                    Unlocks private playlists and transcripts. No API key required when signed in.
-                </p>
-                {authError && <p className="mt-1 text-sm text-rose-400">{authError}</p>}
+                {/* --- Google account (only when the OAuth backend is enabled for this build) --- */}
+                {oauthEnabled && (
+                    <>
+                        <label className="mt-4 block text-sm text-zinc-400">Google account</label>
+                        <div className="mt-2 flex items-center gap-2">
+                            {signedIn ? (
+                                <>
+                                    <span className="flex items-center gap-1.5 text-sm text-accent-400">
+                                        <span className="h-2 w-2 rounded-full bg-accent-400" /> Signed in
+                                    </span>
+                                    <button
+                                        onClick={() => signOut()}
+                                        className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
+                                    >
+                                        Sign out
+                                    </button>
+                                </>
+                            ) : (
+                                <button
+                                    onClick={handleSignIn}
+                                    disabled={authBusy}
+                                    className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
+                                >
+                                    {authBusy ? 'Signing in…' : 'Sign in with Google'}
+                                </button>
+                            )}
+                        </div>
+                        <p className="mt-1.5 text-xs text-zinc-500">
+                            Unlocks private playlists and transcripts. No API key required when signed in.
+                            {!signedIn && ' Sign-in is limited to pre-approved Google accounts (app in “Testing” mode).'}
+                        </p>
+                        {authError && <p className="mt-1 text-sm text-rose-400">{authError}</p>}
 
-                <hr className="my-4 border-ink-700" />
+                        <hr className="my-4 border-ink-700" />
+                    </>
+                )}
 
                 {/* --- API key (only relevant when not signed in) --- */}
                 {signedIn ? (
@@ -125,6 +133,29 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                         {keyError && <p className="mt-1 text-sm text-rose-400">{keyError}</p>}
                     </>
                 )}
+
+                <hr className="my-4 border-ink-700" />
+
+                {/* --- Pomodoro focus timer --- */}
+                <label className="block text-sm text-zinc-400">Pomodoro length</label>
+                <div className="mt-2 flex items-center gap-2">
+                    <input
+                        type="number"
+                        min={5}
+                        max={60}
+                        value={pomodoroLengthMin}
+                        onChange={(e) => {
+                            const n = Math.round(Number(e.target.value))
+                            if (Number.isFinite(n)) setPomodoroLength(Math.min(60, Math.max(5, n)))
+                        }}
+                        className="w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
+                    />
+                    <span className="text-sm text-zinc-400">minutes</span>
+                </div>
+                <p className="mt-1.5 text-xs text-zinc-500">
+                    Length of each focus block. For videos over 15 minutes, a timeline of blocks (with
+                    fixed, skippable 5-minute breaks) appears below the video.
+                </p>
 
                 <hr className="my-4 border-ink-700" />
 

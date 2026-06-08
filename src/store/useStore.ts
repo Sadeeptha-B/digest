@@ -4,6 +4,7 @@ import {
     SAVED_VIDEOS_ID,
     type AccessToken,
     type Playlist,
+    type PomodoroEvent,
     type Progress,
     type TranscriptResult,
     type Video,
@@ -25,11 +26,20 @@ interface StoreState {
     /** cached transcripts keyed by videoId */
     transcripts: Record<string, TranscriptResult>
 
+    /** user-configurable preferences */
+    settings: { pomodoroLengthMin: number }
+    /** Pomodoro focus-session event logs keyed by videoId */
+    pomodoroSessions: Record<string, PomodoroEvent[]>
+
     setApiKeyConfigured: (value: boolean) => void
     setAccessToken: (token: AccessToken | null) => void
     setHasSignedIn: (value: boolean) => void
     cacheTranscript: (videoId: string, result: TranscriptResult) => void
     clearTranscript: (videoId: string) => void
+
+    setPomodoroLength: (min: number) => void
+    logPomodoroEvent: (videoId: string, event: PomodoroEvent) => void
+    clearPomodoroSession: (videoId: string) => void
 
     /** merge a batch of fetched videos into the cache */
     upsertVideos: (videos: Video[]) => void
@@ -60,6 +70,8 @@ const initialData = {
     accessToken: null as AccessToken | null,
     hasSignedIn: false,
     transcripts: {} as Record<string, TranscriptResult>,
+    settings: { pomodoroLengthMin: 25 },
+    pomodoroSessions: {} as Record<string, PomodoroEvent[]>,
 }
 
 function mergePlaylist(existing: Playlist | undefined, incoming: Playlist): Playlist {
@@ -102,6 +114,21 @@ export const useStore = create<StoreState>()(
                     const transcripts = { ...s.transcripts }
                     delete transcripts[videoId]
                     return { transcripts }
+                }),
+
+            setPomodoroLength: (min) => set((s) => ({ settings: { ...s.settings, pomodoroLengthMin: min } })),
+            logPomodoroEvent: (videoId, event) =>
+                set((s) => ({
+                    pomodoroSessions: {
+                        ...s.pomodoroSessions,
+                        [videoId]: [...(s.pomodoroSessions[videoId] ?? []), event],
+                    },
+                })),
+            clearPomodoroSession: (videoId) =>
+                set((s) => {
+                    const pomodoroSessions = { ...s.pomodoroSessions }
+                    delete pomodoroSessions[videoId]
+                    return { pomodoroSessions }
                 }),
 
             upsertVideos: (incoming) =>

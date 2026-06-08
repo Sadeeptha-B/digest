@@ -2,16 +2,8 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { YouTubePlayer } from 'react-youtube'
 import { useStore } from '../store/useStore'
 import { parseCaptionFile } from '../lib/captions'
+import { fmt } from '../lib/time'
 import type { Video } from '../types'
-
-function fmt(sec: number): string {
-  const s = Math.floor(sec % 60)
-  const m = Math.floor((sec / 60) % 60)
-  const h = Math.floor(sec / 3600)
-  const mm = h ? String(m).padStart(2, '0') : String(m)
-  const ss = String(s).padStart(2, '0')
-  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
-}
 
 export function TranscriptPanel({
   video,

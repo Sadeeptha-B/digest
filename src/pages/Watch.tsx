@@ -4,9 +4,15 @@ import YouTube, { type YouTubeEvent, type YouTubePlayer } from 'react-youtube'
 import { useStore } from '../store/useStore'
 import { Queue } from '../components/Queue'
 import { TranscriptPanel } from '../components/TranscriptPanel'
+import { SessionStatsPanel } from '../components/SessionStatsPanel'
+import { PomodoroTimeline } from '../components/PomodoroTimeline'
+import { usePomodoro } from '../hooks/usePomodoro'
 import { BackIcon } from '../components/Icons'
 
-type Tab = 'queue' | 'transcript'
+type Tab = 'queue' | 'transcript' | 'stats'
+
+// Videos longer than this (seconds) get a Pomodoro focus timeline.
+const POMODORO_MIN_DURATION = 15 * 60
 
 // YT.PlayerState
 const ENDED = 0
@@ -24,11 +30,17 @@ export function Watch() {
   const setWatched = useStore((s) => s.setWatched)
   const setPosition = useStore((s) => s.setPosition)
   const getNextVideoId = useStore((s) => s.getNextVideoId)
+  const pomodoroLengthMin = useStore((s) => s.settings.pomodoroLengthMin)
 
   const playerRef = useRef<YouTubePlayer | null>(null)
   // keep the latest videoId for the polling interval's closure
   const videoIdRef = useRef(videoId)
   videoIdRef.current = videoId
+
+  // Video duration (seconds), read from the player. 0 until known; reset between videos.
+  const [durationSec, setDurationSec] = useState(0)
+  useEffect(() => setDurationSec(0), [videoId])
+  const pomodoroEnabled = durationSec > POMODORO_MIN_DURATION
 
   // Periodically persist playback position so we can resume later.
   useEffect(() => {
@@ -53,28 +65,59 @@ export function Watch() {
     if (next) navigate(`/watch/${next}?list=${listId}`)
   }, [getNextVideoId, listId, videoId, navigate])
 
+  // Mark watched and immediately advance — this is what prevents YouTube's end-screen
+  // related-video grid from ever taking over.
+  const finishVideo = useCallback(() => {
+    setWatched(videoId, true)
+    setPosition(videoId, 0)
+    goToNext()
+  }, [videoId, setWatched, setPosition, goToNext])
+
+  const pomodoro = usePomodoro({
+    videoId,
+    playerRef,
+    durationSec,
+    pomodoroLengthSec: pomodoroLengthMin * 60,
+    enabled: pomodoroEnabled,
+    onSessionEnd: finishVideo,
+  })
+  const { handlePlayerState, handleEnded } = pomodoro
+
   const onReady = useCallback(
-    (e: YouTubeEvent) => {
+    async (e: YouTubeEvent) => {
       playerRef.current = e.target
       const resume = useStore.getState().progress[videoId]
       if (resume && !resume.watched && resume.lastPositionSec > 5) {
         e.target.seekTo(resume.lastPositionSec, true)
+      }
+      try {
+        const d = await e.target.getDuration()
+        if (typeof d === 'number' && d > 0) setDurationSec(d)
+      } catch {
+        /* duration not ready yet; falls back to the first PLAYING event */
       }
     },
     [videoId],
   )
 
   const onStateChange = useCallback(
-    (e: YouTubeEvent) => {
+    async (e: YouTubeEvent) => {
       if (e.data === ENDED) {
-        // Mark watched and immediately advance — this is what prevents YouTube's
-        // end-screen related-video grid from ever taking over.
-        setWatched(videoId, true)
-        setPosition(videoId, 0)
-        goToNext()
+        // Let an active focus session play its 3s offramp before advancing; otherwise advance now.
+        if (!handleEnded()) finishVideo()
+        return
       }
+      if (e.data === PLAYING && durationSec === 0) {
+        try {
+          const d = await e.target.getDuration()
+          if (typeof d === 'number' && d > 0) setDurationSec(d)
+        } catch {
+          /* still not ready */
+        }
+      }
+      handlePlayerState(e.data)
     },
-    [videoId, setWatched, setPosition, goToNext],
+    [durationSec, handleEnded, handlePlayerState, finishVideo],
   )
 
   if (!video) {
@@ -130,6 +173,15 @@ export function Watch() {
           />
         </div>
 
+        {pomodoroEnabled && (
+          <PomodoroTimeline
+            view={pomodoro.view}
+            onPause={pomodoro.pause}
+            onResume={pomodoro.resume}
+            onSkipBreak={pomodoro.skipBreak}
+          />
+        )}
+
         <h1 className="mt-3 text-lg font-medium text-white">{video.title}</h1>
         {video.channelTitle && <p className="text-sm text-zinc-500">{video.channelTitle}</p>}
 
@@ -158,8 +210,14 @@ export function Watch() {
               Up next
             </TabButton>
           )}
-          <TabButton active={tab === 'transcript' || !playlist} onClick={() => setTab('transcript')}>
+          <TabButton
+            active={tab === 'transcript' || (!playlist && tab !== 'stats')}
+            onClick={() => setTab('transcript')}
+          >
             Transcript
+          </TabButton>
+          <TabButton active={tab === 'stats'} onClick={() => setTab('stats')}>
+            Session Stats
           </TabButton>
         </div>
 
@@ -168,6 +226,8 @@ export function Watch() {
             <div className="h-full overflow-y-auto no-scrollbar">
               <Queue videoIds={playlist.videoIds} currentVideoId={videoId} listId={playlist.id} />
             </div>
+          ) : tab === 'stats' ? (
+            <SessionStatsPanel video={video} />
           ) : (
             <TranscriptPanel video={video} playerRef={playerRef} />
           )}

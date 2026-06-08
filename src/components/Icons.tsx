@@ -48,3 +48,17 @@ export const CloseIcon = ({ className = 'h-4 w-4' }: P) => (
     <path d="M18 6 6 18M6 6l12 12" />
   </svg>
 )
+
+export const PauseIcon = ({ className = 'h-4 w-4' }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <rect x="6" y="5" width="4" height="14" rx="1" />
+    <rect x="14" y="5" width="4" height="14" rx="1" />
+  </svg>
+)
+
+export const SkipIcon = ({ className = 'h-4 w-4' }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M5 5v14l9-7z" />
+    <rect x="16" y="5" width="3" height="14" rx="1" />
+  </svg>
+)
