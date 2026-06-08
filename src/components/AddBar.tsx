@@ -208,7 +208,7 @@ export function AddBar() {
                         <p className="px-1 py-2 text-sm text-zinc-500">No playlists on this account.</p>
                     ) : (
                         <>
-                            <ul className="max-h-72 overflow-y-auto no-scrollbar">
+                            <ul className="max-h-72 overflow-y-auto scrollbar-slim">
                                 {picker.map((p) => {
                                     const already = useStore
                                         .getState()

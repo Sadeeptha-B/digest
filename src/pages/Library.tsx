@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { AddBar } from '../components/AddBar'
+import { GreetingBanner } from '../components/GreetingBanner'
 import { PlaylistContents } from '../components/PlaylistContents'
 import { PlayIcon, TrashIcon } from '../components/Icons'
 import { DragHandle, SortableList, useSortableRow } from '../components/Sortable'
@@ -16,9 +17,14 @@ export function Library() {
   const selected = playlists.some((p) => p.id === selectedId) ? selectedId : null
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
-      <div className={selected ? 'w-full lg:w-[400px] lg:shrink-0' : 'mx-auto w-full max-w-3xl'}>
-        <AddBar />
+    <div className="flex flex-col gap-6">
+      <div className={selected ? 'w-full' : 'mx-auto w-full max-w-3xl'}>
+        <GreetingBanner />
+      </div>
+
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className={selected ? 'w-full lg:w-[400px] lg:shrink-0' : 'mx-auto w-full max-w-3xl'}>
+          <AddBar />
 
         {playlists.length === 0 ? (
           <p className="mt-10 text-center text-sm text-zinc-500">
@@ -60,6 +66,7 @@ export function Library() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

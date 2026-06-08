@@ -53,7 +53,7 @@ export function PlaylistContents({
                 )}
             </div>
 
-            <div className="mt-4 min-h-0 flex-1 overflow-y-auto no-scrollbar">
+            <div className="mt-4 min-h-0 flex-1 overflow-y-auto scrollbar-slim">
                 <SortableList
                     ids={playlist.videoIds}
                     onReorder={(ids) => reorderVideos(playlist.id, ids)}

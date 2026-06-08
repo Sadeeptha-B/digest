@@ -11,6 +11,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     const reset = useStore((s) => s.reset)
     const pomodoroLengthMin = useStore((s) => s.settings.pomodoroLengthMin)
     const setPomodoroLength = useStore((s) => s.setPomodoroLength)
+    const resetThresholdMin = useStore((s) => s.settings.pomodoroResetThresholdMin ?? 5)
+    const setResetThreshold = useStore((s) => s.setPomodoroResetThreshold)
+    const userName = useStore((s) => s.settings.userName ?? '')
+    const setUserName = useStore((s) => s.setUserName)
 
     const [key, setKey] = useState('')
     const [showKey, setShowKey] = useState(false)
@@ -29,14 +33,29 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:items-center"
             onClick={onClose}
         >
             <div
-                className="w-full max-w-md rounded-xl border border-ink-700 bg-ink-850 p-5"
+                className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto scrollbar-slim rounded-xl border border-ink-700 bg-ink-850 p-5"
                 onClick={(e) => e.stopPropagation()}
             >
                 <h2 className="text-base font-medium text-white">Settings</h2>
+
+                {/* --- Your name (used for the library greeting) --- */}
+                <label className="mt-4 block text-sm text-zinc-400">Your name</label>
+                <input
+                    type="text"
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value.slice(0, 40))}
+                    placeholder="What should we call you?"
+                    className="mt-2 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
+                />
+                <p className="mt-1.5 text-xs text-zinc-500">
+                    Used for the greeting on your library page. Leave blank to keep it generic.
+                </p>
+
+                <hr className="my-4 border-ink-700" />
 
                 {/* --- Google account --- */}
                 <>
@@ -152,6 +171,28 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 <p className="mt-1.5 text-xs text-zinc-500">
                     Length of each focus block. For videos over 15 minutes, a timeline of blocks (with
                     fixed, skippable 5-minute breaks) appears below the video.
+                </p>
+
+                {/* --- Pomodoro reset threshold --- */}
+                <label className="mt-4 block text-sm text-zinc-400">Reset threshold</label>
+                <div className="mt-2 flex items-center gap-2">
+                    <input
+                        type="number"
+                        min={0}
+                        max={pomodoroLengthMin}
+                        value={resetThresholdMin}
+                        onChange={(e) => {
+                            const n = Math.round(Number(e.target.value))
+                            if (Number.isFinite(n)) setResetThreshold(Math.min(pomodoroLengthMin, Math.max(0, n)))
+                        }}
+                        className="w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
+                    />
+                    <span className="text-sm text-zinc-400">minutes</span>
+                </div>
+                <p className="mt-1.5 text-xs text-zinc-500">
+                    Pause within the first {resetThresholdMin} minute{resetThresholdMin === 1 ? '' : 's'} of
+                    a block and it resets (resume starts a fresh block). Pause later and the timer just
+                    holds — your progress is kept and the same block resumes. Set to 0 to never reset.
                 </p>
 
                 <hr className="my-4 border-ink-700" />
