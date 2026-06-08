@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useStore } from './store/useStore'
 import { getValidToken, tokenIsValid } from './lib/oauth'
 import { refreshApiKeyStatus } from './lib/apiKey'
+import { getRecallStatus } from './lib/recall'
 import { fetchMyChannelTitle } from './lib/youtube'
 import { Layout } from './components/Layout'
 import { ApiKeyGate } from './components/ApiKeyGate'
@@ -40,6 +41,14 @@ export default function App() {
             cancelled = true
         }
     }, [hasSignedIn])
+
+    // Probe whether the getrecall.ai integration is configured on the server, so the Watch page
+    // knows whether to offer the Summary tab. The key lives only server-side; this is a boolean.
+    useEffect(() => {
+        void getRecallStatus().then((configured) => {
+            useStore.getState().setRecallConfigured(configured)
+        })
+    }, [])
 
     // Prefill the display name from the signed-in account's YouTube channel title, but only when
     // the user hasn't set one — so it stays overridable from Settings.
