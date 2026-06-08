@@ -1,8 +1,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "digest",
-  "compatibility_date": "2026-06-01",
-  // Static build output. Cloudflare Pages also auto-compiles the sibling `functions/` directory
-  // into Pages Functions served on the same origin (e.g. /auth/*).
-  "pages_build_output_dir": "dist"
+  "compatibility_date": "2026-06-01"
+  // Cloudflare Pages auto-compiles the sibling `functions/` directory into Pages Functions
+  // served on the same origin (e.g. /auth/*, /api/*). The static build output dir (`dist`) is
+  // passed explicitly to `wrangler pages deploy` — keeping it out of the config lets
+  // `wrangler pages dev -- npm run dev` proxy the Vite dev server without the "directory and
+  // proxy command" conflict that `pages_build_output_dir` triggers in wrangler v4.
 }

@@ -50,6 +50,8 @@ short-lived access token. See the full setup in
 2. Configure the **OAuth consent screen** (External), add the scope
    `https://www.googleapis.com/auth/youtube.readonly`, and add your Google account as a
    **Test user** (staying in *Testing* needs no Google verification for personal use).
+   Only accounts on the **Test users** list can sign in; everyone else gets `access_denied` and
+   must use the API-key path instead. The app surfaces this in the sign-in UI.
 3. **Credentials → Create OAuth client ID → Web application.** Under **Authorized redirect
    URIs** add `http://localhost:8788/auth/callback` (local dev) and
    `https://<project>.pages.dev/auth/callback` (production).
@@ -84,7 +86,15 @@ so to use the app locally you need them running. Put your client id/secret in `.
 npm run dev:pages  # http://localhost:8788 — Vite + the Pages Functions on one origin
 ```
 
-Make sure `http://localhost:8788/auth/callback` is in the OAuth client's redirect URIs.
+Make sure `http://localhost:8788/auth/callback` is in the OAuth client's redirect URIs. Dev runs
+over plain HTTP on `localhost` (a browser-trusted secure context, so the `Secure` cookies still
+work). The CSP is **not** enforced in dev (it's a production hardening measure that would otherwise
+break Vite's inline HMR scripts) — see the note on [`csp.ts`](csp.ts) below.
+
+**Don't want to set up OAuth locally?** You don't have to — both sign-in and the public API-key
+path are always available at runtime. Skip `GOOGLE_CLIENT_ID/SECRET` in `.dev.vars` and just use an
+API key from the onboarding screen (the sign-in button will simply error if used). You still need
+`dev:pages`, since the `/api` YouTube proxy is required either way.
 
 ### 4. Build
 
@@ -159,8 +169,11 @@ Then redeploy (Deployments → Retry/Redeploy) so the Functions pick them up. Th
   GitHub Pages `/digest/` subpath).
 - Client-side routes use `BrowserRouter`; [`public/_redirects`](public/_redirects) rewrites deep
   links back to `index.html` so refreshes still work.
-- [`public/_headers`](public/_headers) ships a real CSP response header (with `frame-ancestors`),
-  which Cloudflare Pages serves automatically.
+- The CSP lives in one place — [`csp.ts`](csp.ts). The production build injects it as a `<meta>` tag
+  and emits a `dist/_headers` file with the stronger real CSP response header (adding `frame-ancestors`),
+  which Cloudflare Pages serves automatically. It is **not** enforced in the Vite dev server (CSP is a
+  production hardening measure, and enforcing it in dev breaks Vite's inline HMR scripts); verify the
+  real policy with `npm run build && npm run preview`.
 - Add your `https://<project>.pages.dev` to the YouTube **API key**'s referrer restrictions if you
   use the API-key fallback.
 - **Custom domain (optional):** add it under the project's **Custom domains** tab, then add

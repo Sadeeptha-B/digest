@@ -33,7 +33,7 @@ export function AddBar() {
     const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
 
     const signedIn = hasSignedIn || tokenIsValid(accessToken)
-    const reauthMessage = 'Sign in again to access your private playlists.'
+    const reauthMessage = 'Your session expired — sign in again from Settings to import playlists.'
 
     /** Ensure a valid token if the user has signed in; otherwise fetch anonymously (the proxy
      *  falls back to the server-side API key). */
