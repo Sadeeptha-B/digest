@@ -41,6 +41,28 @@ export type TranscriptResult =
     }
   | { status: 'unavailable'; reason: string }
 
+export type PomodoroEventType =
+  | 'onramp-start'
+  | 'work-start'
+  | 'work-complete'
+  | 'pause-reset'
+  | 'resume'
+  | 'break-start'
+  | 'break-skipped'
+  | 'break-complete'
+  | 'offramp'
+  | 'done'
+
+export interface PomodoroEvent {
+  type: PomodoroEventType
+  /** epoch ms */
+  at: number
+  /** 0-based block index this event relates to */
+  index?: number
+  /** duration of the just-ended work stretch, for work-complete / pause-reset */
+  stretchSec?: number
+}
+
 export interface AccessToken {
   value: string
   /** epoch ms when the token expires */
