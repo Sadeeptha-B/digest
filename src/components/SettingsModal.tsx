@@ -1,24 +1,26 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { signOut, tokenIsValid } from '../lib/oauth'
+import { clearApiKey } from '../lib/apiKey'
 import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
+import { useApiKey } from '../hooks/useApiKey'
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-    const apiKey = useStore((s) => s.apiKey)
-    const setApiKey = useStore((s) => s.setApiKey)
     const accessToken = useStore((s) => s.accessToken)
     const hasSignedIn = useStore((s) => s.hasSignedIn)
     const reset = useStore((s) => s.reset)
 
-    const [key, setKey] = useState(apiKey)
+    const [key, setKey] = useState('')
     const [showKey, setShowKey] = useState(false)
     const [confirmClear, setConfirmClear] = useState(false)
 
     const signedIn = hasSignedIn || tokenIsValid(accessToken)
     const { busy: authBusy, error: authError, start: handleSignIn } = useGoogleSignIn()
+    const { configured: keyConfigured, busy: keyBusy, error: keyError, save: saveKey, remove: removeKey } = useApiKey()
 
     function handleClearData() {
         if (signedIn) signOut() // revoke the token before wiping everything
+        void clearApiKey().catch(() => { }) // clear the server-side key cookie too
         reset()
         onClose()
     }
@@ -79,17 +81,48 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 )}
                 {(!signedIn || showKey) && (
                     <>
-                        <input
-                            type="password"
-                            value={key}
-                            onChange={(e) => setKey(e.target.value)}
-                            placeholder="AIza…"
-                            className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
-                        />
+                        {keyConfigured && (
+                            <div className="mt-2 flex items-center gap-2">
+                                <span className="flex items-center gap-1.5 text-sm text-accent-400">
+                                    <span className="h-2 w-2 rounded-full bg-accent-400" /> Key configured
+                                </span>
+                                <button
+                                    onClick={() => void removeKey()}
+                                    disabled={keyBusy}
+                                    className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800 disabled:opacity-40"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        )}
+                        <form
+                            className="mt-2 flex gap-2"
+                            onSubmit={async (e) => {
+                                e.preventDefault()
+                                if (key.trim() && (await saveKey(key))) setKey('')
+                            }}
+                        >
+                            <input
+                                type="password"
+                                value={key}
+                                onChange={(e) => setKey(e.target.value)}
+                                placeholder={keyConfigured ? 'Replace key…' : 'AIza…'}
+                                disabled={keyBusy}
+                                className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500 disabled:opacity-50"
+                            />
+                            <button
+                                type="submit"
+                                disabled={keyBusy || !key.trim()}
+                                className="rounded-lg bg-accent-600 px-3 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
+                            >
+                                {keyBusy ? 'Checking…' : 'Save'}
+                            </button>
+                        </form>
                         <p className="mt-1.5 text-xs text-zinc-500">
-                            For browsing public content without signing in. Restrict it by HTTP referrer in
-                            Google Cloud.
+                            For browsing public content without signing in. Stored server-side; restrict it to
+                            the YouTube Data API in Google Cloud.
                         </p>
+                        {keyError && <p className="mt-1 text-sm text-rose-400">{keyError}</p>}
                     </>
                 )}
 
@@ -126,21 +159,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     </button>
                 )}
 
-                <div className="mt-5 flex justify-end gap-2">
+                <div className="mt-5 flex justify-end">
                     <button
                         onClick={onClose}
-                        className="rounded-lg border border-ink-700 px-4 py-2 text-sm text-zinc-300 hover:bg-ink-800"
-                    >
-                        Close
-                    </button>
-                    <button
-                        onClick={() => {
-                            setApiKey(key)
-                            onClose()
-                        }}
                         className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500"
                     >
-                        Save
+                        Done
                     </button>
                 </div>
             </div>
