@@ -156,16 +156,21 @@ YouTube videos/articles into cards), **not** Recall.ai the meeting-bot API.
 - **API** ([docs](https://docs.recall.it/developer/api)):
   - **Base:** `https://backend.getrecall.ai/api/v1` · **Auth:** `Authorization: Bearer sk_…`
     (key from **Settings → API & MCP**; up to 10 keys; shown once).
-  - `GET /cards` — filter by **`source_url` substring** (match the YouTube video id), tags,
-    date range.
+  - `GET /cards` — filter by **`source_url_contains`** (match the YouTube video id), `tags`,
+    `date_from`/`date_to`. Returns `{ results, total_count }`.
   - `GET /cards/{card_id}` — content `chunks` (`focus_query`, `max_chunks` 1–50).
   - `GET /search` — semantic search (focused/exhaustive).
   - Also an **MCP server** and **bulk markdown export**.
 - **Card shape:** `id`, `title`, `created_at`, `source_url`,
-  `chunks[{ chunk_id, content, source, timestamps }]`. The optional **`timestamps`** allow
-  **click-to-seek** on summary points.
-- **Integration pattern:** For the current video, `GET /cards?source_url=<videoId>` → fetch
-  the card → render `chunks` in a new **"Summary" tab** next to Queue/Transcript.
+  `chunks[{ chunk_id, content, source, timestamps }]`. The optional **`timestamps`** (string time
+  codes like `"01:23"`) allow **click-to-seek** on summary points.
+- **Integration pattern (shipped):** For the current video,
+  `GET /cards?source_url_contains=<videoId>` → fetch the card → render `chunks` in the **"Summary"
+  tab** next to Transcript. Served through the existing **same-origin Cloudflare Pages Functions
+  proxy** ([`functions/api/recall/`](../../functions/api/recall)), which injects the key from the
+  `RECALL_API_KEY` env secret — the browser never sees it, and the tab is hidden unless the server
+  reports the key is configured (`GET /api/recall/status`). This supersedes the "home-server proxy"
+  idea below: Digest already has a secret-holding backend, so no separate server is needed.
 - **Cost:** Whatever your Recall plan is; the API itself adds no per-call fee documented.
 - **Concerns:**
   - **Key sensitivity:** the `sk_` key grants read access to your **entire** knowledge base
@@ -285,7 +290,7 @@ No captions exist for a video at all?      ──► Option 4 / Option 6's Whisp
 | Multi-select "Import from my channel" (incl. private) | ✅ Shipped |
 | `ProxyTranscriptProvider` (Options 2/3/6) | ⬜ Seam stubbed, not built |
 | Home-server `/transcript` endpoint | ⬜ Not built |
-| getrecall.ai "Summary" tab | ⬜ Not built |
+| getrecall.ai "Summary" tab | ✅ Shipped (via same-origin `/api/recall` proxy) |
 
 ---
 

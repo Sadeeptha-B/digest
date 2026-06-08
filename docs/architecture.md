@@ -250,6 +250,8 @@ from Cloudflare instead of your laptop.
    `functions/` automatically alongside it.
 3. **Secrets:** `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` are set as encrypted variables on
    the Pages project (Settings → Variables and secrets). The frontend needs **no** env vars.
+   **Optional:** `RECALL_API_KEY` enables the getrecall.ai **Summary** tab — it's injected by the
+   `/api/recall/*` proxy and never reaches the browser; leave it unset to hide the tab.
 4. **TLS + origin:** Cloudflare serves `https://<project>.pages.dev` (or your custom domain)
    with its own certificate. Add `https://<project>.pages.dev/auth/callback` to the OAuth
    client's redirect URIs.
@@ -358,10 +360,17 @@ careful setup or accepts an intentional tradeoff.
   persists only the boolean `apiKeyConfigured`. That removes the old "any script on the origin can
   read the key" problem, but the key should still be restricted in Google Cloud to **YouTube Data
   API v3** so a leaked server-side secret cannot be reused broadly.
+- **The Recall proxy holds a broad key server-side.** [`/api/recall/*`](../functions/api/recall)
+  injects `RECALL_API_KEY`, which grants read access to your **entire** getrecall.ai knowledge base.
+  Like the Google secret it lives only server-side (Pages secret / `.dev.vars`), the proxy is a
+  GET-only allowlist (`cards`, `cards/{id}`) that rejects cross-site requests, and the SPA only ever
+  learns a boolean from `GET /api/recall/status`. Keep the key scoped to the Recall account you're
+  comfortable exposing read-only through this deployment.
 - **Future backend expansion would need a fresh security review.** The current backend is narrow:
-  OAuth brokerage, API-key storage, and a small YouTube proxy. If transcripts, broader proxying, or
-  cross-device sync move server-side later, revisit cookie scope, CSP, origin boundaries, and abuse
-  controls as a new design rather than assuming this posture scales unchanged.
+  OAuth brokerage, API-key storage, a small YouTube proxy, and the read-only Recall summary proxy. If
+  transcripts, broader proxying, or cross-device sync move server-side later, revisit cookie scope,
+  CSP, origin boundaries, and abuse controls as a new design rather than assuming this posture scales
+  unchanged.
 
 ### 7.2 Security posture in one paragraph
 

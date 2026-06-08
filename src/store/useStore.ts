@@ -27,6 +27,9 @@ interface StoreState {
     hasSignedIn: boolean
     /** cached transcripts keyed by videoId */
     transcripts: Record<string, TranscriptResult>
+    /** Whether the getrecall.ai integration is configured on the server. Probed on load (the key
+     *  lives only server-side); non-persisted, so it's always reconciled fresh. */
+    recallConfigured: boolean
 
     /** user-configurable preferences */
     settings: {
@@ -46,6 +49,7 @@ interface StoreState {
     setHasSignedIn: (value: boolean) => void
     cacheTranscript: (videoId: string, result: TranscriptResult) => void
     clearTranscript: (videoId: string) => void
+    setRecallConfigured: (value: boolean) => void
 
     addFocusNote: (text: string) => void
     removeFocusNote: (id: string) => void
@@ -87,6 +91,7 @@ const initialData = {
     accessToken: null as AccessToken | null,
     hasSignedIn: false,
     transcripts: {} as Record<string, TranscriptResult>,
+    recallConfigured: false,
     settings: {
         pomodoroLengthMin: 25,
         pomodoroResetThresholdMin: 5,
@@ -138,6 +143,7 @@ export const useStore = create<StoreState>()(
                     delete transcripts[videoId]
                     return { transcripts }
                 }),
+            setRecallConfigured: (value) => set({ recallConfigured: value }),
 
             setPomodoroLength: (min) => set((s) => ({ settings: { ...s.settings, pomodoroLengthMin: min } })),
             setPomodoroResetThreshold: (min) =>
@@ -271,8 +277,9 @@ export const useStore = create<StoreState>()(
         {
             name: 'digest-store',
             version: 5,
-            // Persist everything except the short-lived access token (kept in memory only).
-            partialize: ({ accessToken: _omit, ...rest }) => rest,
+            // Persist everything except the short-lived access token (kept in memory only) and the
+            // server-probed recallConfigured flag (always reconciled fresh on load).
+            partialize: ({ accessToken: _omit, recallConfigured: _omitRecall, ...rest }) => rest,
             // v2 dropped the in-browser `oauthClientId` (OAuth moved to a server-side worker).
             // v3 dropped the in-browser `apiKey` (now a server-side HttpOnly cookie) — delete the
             // stale secret from localStorage; the user re-enters it once to set the cookie.

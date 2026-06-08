@@ -3,13 +3,14 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import YouTube, { type YouTubeEvent, type YouTubePlayer } from 'react-youtube'
 import { useStore } from '../store/useStore'
 import { TranscriptPanel } from '../components/TranscriptPanel'
+import { SummaryPanel } from '../components/SummaryPanel'
 import { SessionStatsPanel } from '../components/SessionStatsPanel'
 import { FocusPanel } from '../components/focus/FocusPanel'
 import { PomodoroTimeline } from '../components/PomodoroTimeline'
 import { usePomodoro } from '../hooks/usePomodoro'
 import { BackIcon } from '../components/Icons'
 
-type Tab = 'transcript' | 'stats' | 'calm'
+type Tab = 'transcript' | 'summary' | 'stats' | 'calm'
 
 // Videos longer than this (seconds) get a Pomodoro focus timeline.
 const POMODORO_MIN_DURATION = 15 * 60
@@ -30,6 +31,7 @@ export function Watch() {
   const setWatched = useStore((s) => s.setWatched)
   const setPosition = useStore((s) => s.setPosition)
   const getNextVideoId = useStore((s) => s.getNextVideoId)
+  const recallConfigured = useStore((s) => s.recallConfigured)
   const pomodoroLengthMin = useStore((s) => s.settings.pomodoroLengthMin)
   const pomodoroResetThresholdMin = useStore((s) => s.settings.pomodoroResetThresholdMin ?? 5)
 
@@ -210,6 +212,11 @@ export function Watch() {
           <TabButton active={tab === 'transcript'} onClick={() => setTab('transcript')}>
             Transcript
           </TabButton>
+          {recallConfigured && (
+            <TabButton active={tab === 'summary'} onClick={() => setTab('summary')}>
+              Summary
+            </TabButton>
+          )}
           <TabButton active={tab === 'stats'} onClick={() => setTab('stats')}>
             Stats
           </TabButton>
@@ -223,6 +230,8 @@ export function Watch() {
             <SessionStatsPanel video={video} />
           ) : tab === 'calm' ? (
             <FocusPanel />
+          ) : tab === 'summary' ? (
+            <SummaryPanel video={video} playerRef={playerRef} />
           ) : (
             <TranscriptPanel video={video} playerRef={playerRef} />
           )}
