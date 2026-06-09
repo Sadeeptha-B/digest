@@ -4,9 +4,11 @@ import { GearIcon } from './Icons'
 import { SettingsModal } from './SettingsModal'
 import { useStore } from '../store/useStore'
 import { ACCENT_THEMES, applyAccentTheme, DEFAULT_ACCENT_THEME } from '../lib/themes'
+import { PageTitleContext, type PageHeading } from '../lib/pageTitle'
 
 export function Layout({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [heading, setHeading] = useState<PageHeading | null>(null)
   const accentTheme = useStore((s) => s.settings.accentTheme ?? DEFAULT_ACCENT_THEME)
   const setAccentTheme = useStore((s) => s.setAccentTheme)
 
@@ -18,10 +20,16 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-full">
       <header className="sticky top-0 z-30 border-b border-ink-800 bg-ink-950/80 backdrop-blur">
-        <div className="flex w-full items-center justify-between px-4 py-3 sm:px-6">
+        <div className="relative flex w-full items-center justify-between px-4 py-3 sm:px-6">
           <Link to="/" className="text-lg font-semibold tracking-tight text-white">
             Digest
           </Link>
+          {heading && (
+            <span className="pointer-events-none absolute left-1/2 hidden max-w-[50%] -translate-x-1/2 truncate text-sm md:block">
+              <span className="font-medium text-zinc-200">{heading.title}</span>
+              {heading.subtitle && <span className="text-zinc-500"> · {heading.subtitle}</span>}
+            </span>
+          )}
           <div className="flex items-center gap-3">
             <div
               className="flex items-center gap-1.5"
@@ -57,7 +65,9 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="w-full px-4 py-6 sm:px-6">{children}</main>
+      <PageTitleContext.Provider value={setHeading}>
+        <main className="w-full px-4 py-6 sm:px-6">{children}</main>
+      </PageTitleContext.Provider>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>

@@ -30,8 +30,8 @@ export function BreathingPacer() {
   }, [running, idx, phase.sec])
 
   return (
-    <div className="rounded-xl border border-ink-700 bg-ink-900/40 p-4">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="flex flex-col rounded-xl border border-ink-700 bg-ink-900/40 p-3 sm:h-full sm:w-44 sm:shrink-0">
+      <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium text-zinc-300">Breathe</span>
         <button
           onClick={() => setRunning((r) => !r)}
@@ -43,21 +43,21 @@ export function BreathingPacer() {
         </button>
       </div>
 
-      <div className="flex flex-col items-center py-2">
-        <div className="relative flex h-32 w-32 items-center justify-center">
+      <div className="flex flex-1 flex-col items-center justify-center">
+        <div className="relative flex h-20 w-20 items-center justify-center">
           {/* outer guide ring */}
           <div className="absolute inset-0 rounded-full border border-accent-500/20" />
           {/* breathing ring */}
           <div
-            className="h-28 w-28 rounded-full border-2 border-accent-400/60 bg-accent-500/15"
+            className="h-16 w-16 rounded-full border-2 border-accent-400/60 bg-accent-500/15"
             style={{
               transform: `scale(${phase.scale})`,
               transition: reduced.current ? 'none' : `transform ${phase.sec}s ease-in-out`,
             }}
           />
-          <span className="absolute text-sm font-medium text-zinc-200">{phase.label}</span>
+          <span className="absolute text-[11px] font-medium text-zinc-200">{phase.label}</span>
         </div>
-        <p className="mt-2 text-xs text-zinc-500">Box breathing · in 4 · hold 4 · out 4 · hold 4</p>
+        <p className="mt-1.5 text-[11px] text-zinc-500">Box breathing</p>
       </div>
     </div>
   )
