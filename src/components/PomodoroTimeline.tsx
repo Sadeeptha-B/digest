@@ -78,7 +78,7 @@ export function PomodoroTimeline({
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-ink-700 bg-ink-900/40 px-4 py-3">
+    <div className="mt-3 shrink-0 rounded-xl border border-ink-700 bg-ink-900/40 px-4 py-2.5">
       <Header view={view} />
 
       <div className="mt-2.5 flex items-center gap-1.5">
@@ -155,7 +155,7 @@ function Header({ view }: { view: PomodoroView }) {
     <div className="flex items-end justify-between gap-3">
       <span className="min-w-0 truncate text-sm font-medium">{label}</span>
       {time && (
-        <span className={`shrink-0 font-mono text-2xl leading-none tabular-nums ${tone}`}>
+        <span className={`shrink-0 font-mono text-xl leading-none tabular-nums ${tone}`}>
           {time}
         </span>
       )}
@@ -212,5 +212,5 @@ function Controls({
       return null
   }
 
-  return <div className="mt-3 flex justify-end">{control}</div>
+  return <div className="mt-2 flex justify-end">{control}</div>
 }

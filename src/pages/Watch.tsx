@@ -8,9 +8,10 @@ import { SessionStatsPanel } from '../components/SessionStatsPanel'
 import { FocusPanel } from '../components/focus/FocusPanel'
 import { PomodoroTimeline } from '../components/PomodoroTimeline'
 import { usePomodoro } from '../hooks/usePomodoro'
+import { usePageTitle } from '../lib/pageTitle'
 import { BackIcon } from '../components/Icons'
 
-type Tab = 'transcript' | 'summary' | 'stats' | 'calm'
+type Tab = 'transcript' | 'summary' | 'stats'
 
 // Videos longer than this (seconds) get a Pomodoro focus timeline.
 const POMODORO_MIN_DURATION = 15 * 60
@@ -34,6 +35,9 @@ export function Watch() {
   const recallConfigured = useStore((s) => s.recallConfigured)
   const pomodoroLengthMin = useStore((s) => s.settings.pomodoroLengthMin)
   const pomodoroResetThresholdMin = useStore((s) => s.settings.pomodoroResetThresholdMin ?? 5)
+
+  // Surface the video title + channel in the shared page header (centered).
+  usePageTitle(video?.title ?? null, video?.channelTitle || undefined)
 
   const playerRef = useRef<YouTubePlayer | null>(null)
   // keep the latest videoId for the polling interval's closure
@@ -139,8 +143,10 @@ export function Watch() {
 
   return (
     <div className="mx-auto grid max-w-[1700px] gap-6 lg:grid-cols-[minmax(0,1fr)_402px]">
-      <div className="min-w-0">
-        <div className="mb-3 flex items-center gap-2">
+      {/* On large screens the column is one screenful tall: the video flexes to fill whatever
+          space is left after the Pomodoro + focus widgets, so they're always visible. */}
+      <div className="flex min-w-0 flex-col lg:h-[calc(100vh-7rem)]">
+        <div className="mb-3 flex shrink-0 items-center gap-2">
           <Link
             to={playlist ? `/playlist/${playlist.id}` : '/'}
             className="rounded-lg p-2 text-zinc-400 hover:bg-ink-800 hover:text-white"
@@ -153,28 +159,30 @@ export function Watch() {
           </span>
         </div>
 
-        <div className="mx-auto aspect-video max-h-[calc(100vh-9rem)] w-full overflow-hidden rounded-xl bg-black">
-          <YouTube
-            key={videoId}
-            videoId={videoId}
-            className="h-full w-full"
-            iframeClassName="h-full w-full"
-            opts={{
-              width: '100%',
-              height: '100%',
-              host: 'https://www.youtube-nocookie.com',
-              playerVars: {
-                rel: 0,
-                autoplay: 1,
-                modestbranding: 1,
-                playsinline: 1,
-                cc_load_policy: 1,
-                cc_lang_pref: 'en',
-              },
-            }}
-            onReady={onReady}
-            onStateChange={onStateChange}
-          />
+        <div className="flex min-h-0 flex-1 items-center justify-center lg:min-h-[18rem]">
+          <div className="aspect-video max-h-full w-full overflow-hidden rounded-xl bg-black lg:h-full lg:w-auto lg:max-w-full">
+            <YouTube
+              key={videoId}
+              videoId={videoId}
+              className="h-full w-full"
+              iframeClassName="h-full w-full"
+              opts={{
+                width: '100%',
+                height: '100%',
+                host: 'https://www.youtube-nocookie.com',
+                playerVars: {
+                  rel: 0,
+                  autoplay: 1,
+                  modestbranding: 1,
+                  playsinline: 1,
+                  cc_load_policy: 1,
+                  cc_lang_pref: 'en',
+                },
+              }}
+              onReady={onReady}
+              onStateChange={onStateChange}
+            />
+          </div>
         </div>
 
         {pomodoroEnabled && (
@@ -186,10 +194,9 @@ export function Watch() {
           />
         )}
 
-        <h1 className="mt-3 text-lg font-medium text-white">{video.title}</h1>
-        {video.channelTitle && <p className="text-sm text-zinc-500">{video.channelTitle}</p>}
+        <FocusPanel />
 
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex shrink-0 justify-end gap-2">
           <button
             onClick={() => setWatched(videoId, true)}
             className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
@@ -220,16 +227,11 @@ export function Watch() {
           <TabButton active={tab === 'stats'} onClick={() => setTab('stats')}>
             Stats
           </TabButton>
-          <TabButton active={tab === 'calm'} onClick={() => setTab('calm')}>
-            Calm
-          </TabButton>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
           {tab === 'stats' ? (
             <SessionStatsPanel video={video} />
-          ) : tab === 'calm' ? (
-            <FocusPanel />
           ) : tab === 'summary' ? (
             <SummaryPanel video={video} playerRef={playerRef} />
           ) : (
