@@ -19,7 +19,7 @@ export function BrainDumpPad() {
   }
 
   return (
-    <div className="flex h-64 min-h-0 flex-col rounded-xl border border-ink-700 bg-ink-900/40 p-4 sm:h-full sm:flex-1">
+    <div className="flex h-64 min-h-0 flex-col rounded-xl border border-ink-700 bg-ink-900/40 p-4 sm:h-full sm:w-96 sm:shrink-0">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium text-zinc-300">Brain dump</span>
         {notes.length > 0 && (
