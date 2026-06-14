@@ -43,8 +43,8 @@ export default function App() {
         }
     }, [hasSignedIn])
 
-    // Probe whether the getrecall.ai integration is configured on the server, so the Watch page
-    // knows whether to offer the Summary tab. The key lives only server-side; this is a boolean.
+    // Probe whether this browser has a Recall key configured, so the Watch page knows whether to
+    // offer the Summary tab. The key lives only server-side (see ADR 0009); this is a boolean.
     useEffect(() => {
         void getRecallStatus().then((configured) => {
             useStore.getState().setRecallConfigured(configured)

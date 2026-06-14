@@ -21,7 +21,8 @@ See [`../../CLAUDE.md`](../../CLAUDE.md) for when to add one and how the doc tie
 | [0004](./0004-plain-http-in-dev.md) | Dev runs plain HTTP on `localhost`, not HTTPS | Accepted |
 | [0005](./0005-no-oauth-api-key-build-toggle.md) | No OAuth/API-key build toggle — both always on | Accepted |
 | [0006](./0006-local-authoritative-playlist-sync.md) | Digest owns the playlist; YouTube is a source | Accepted |
-| [0007](./0007-recall-summaries-via-same-origin-proxy.md) | getrecall.ai summaries via the same-origin proxy | Accepted |
+| [0007](./0007-recall-summaries-via-same-origin-proxy.md) | getrecall.ai summaries via the same-origin proxy | Superseded by [0009](./0009-bring-your-own-recall-key.md) |
 | [0008](./0008-remove-official-captions-download.md) | Remove official `captions.download`; manual import only | Accepted |
+| [0009](./0009-bring-your-own-recall-key.md) | Recall summaries via per-user keys (no shared server key) | Accepted |
 
 To add one, copy [`0000-template.md`](./0000-template.md) to the next number and append a row here.

@@ -43,6 +43,11 @@ interface CardsListResponse {
 // navigating back and forth within a session. `null` means "looked up, no card".
 const cardCache = new Map<string, RecallCard | null>()
 
+/** Drop cached Recall summaries after the configured key changes. */
+export function clearRecallCache(): void {
+    cardCache.clear()
+}
+
 function matchesVideoId(sourceUrl: string | undefined, videoId: string): boolean {
     if (!sourceUrl) return false
     const parsed = parseYouTubeInput(sourceUrl)
@@ -81,8 +86,8 @@ function toCard(value: unknown): RecallCard {
     }
 }
 
-/** Whether the Recall integration is configured on the server. Never throws (false on any failure,
- *  e.g. running plain `vite dev` with no Functions). */
+/** Whether this browser has a Recall key configured (per-user; see ADR 0009). Never throws (false
+ *  on any failure, e.g. running plain `vite dev` with no Functions). */
 export async function getRecallStatus(): Promise<boolean> {
     try {
         const res = await fetch(`${RECALL_BASE}/status`, { credentials: 'same-origin' })

@@ -1,6 +1,6 @@
 # 0007 — getrecall.ai summaries via the same-origin proxy
 
-- **Status:** Accepted
+- **Status:** Superseded by [0009](./0009-bring-your-own-recall-key.md) _(only the key source — shared `RECALL_API_KEY` env secret → per-user cookie; the same-origin proxy + GET allowlist below still hold)_
 - **Date:** 2026-06-14
 
 ## Context

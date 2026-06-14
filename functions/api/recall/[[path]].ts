@@ -1,16 +1,14 @@
 import { isCrossSite, json } from '../../_lib/http'
+import { readRecallKey } from '../../_lib/recallkey'
 
 // Same-origin proxy for the getrecall.ai (Recall) knowledge-base API. The browser calls
 // /api/recall/cards?... with no credentials; this Function injects the Recall key server-side.
 //
 // The Recall `sk_` key grants read access to the user's ENTIRE knowledge base, so it must never
-// reach the browser. It lives only as a Pages env secret (RECALL_API_KEY) — the same model as the
-// Google client secret. Only a fixed set of read endpoints is allowed, so this can't be used as an
-// open relay.
-
-interface Env {
-    RECALL_API_KEY?: string
-}
+// reach the browser. Each user brings their own key, stored in the digest_recall_key HttpOnly
+// cookie (see ./key.ts); the proxy injects it server-side. There is no shared/server-wide key — the
+// Summary tab is available only to users who have configured their own. Only a fixed set of read
+// endpoints is allowed, so this can't be used as an open relay. (See ADR 0009.)
 
 const UPSTREAM = 'https://backend.getrecall.ai/api/v1'
 const YOUTUBE_VIDEO_ID = /^[\w-]{11}$/
@@ -37,7 +35,7 @@ function getUpstreamUrl(request: Request, segments: string[]): string | null {
     return `${UPSTREAM}/${path}`
 }
 
-export const onRequest: PagesFunction<Env> = async ({ request, params, env }) => {
+export const onRequest: PagesFunction = async ({ request, params }) => {
     if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, { status: 405 })
     if (isCrossSite(request)) return json({ error: 'forbidden' }, { status: 403 })
 
@@ -46,12 +44,13 @@ export const onRequest: PagesFunction<Env> = async ({ request, params, env }) =>
     const upstreamUrl = getUpstreamUrl(request, segments)
     if (!upstreamUrl) return json({ error: 'bad_request' }, { status: 400 })
 
-    if (!env.RECALL_API_KEY) {
-        return json({ error: 'not_configured', message: 'Recall is not configured on this server.' }, { status: 503 })
+    const recallKey = readRecallKey(request)
+    if (!recallKey) {
+        return json({ error: 'not_configured', message: 'No Recall key configured.' }, { status: 503 })
     }
 
     const upstream = await fetch(upstreamUrl, {
-        headers: { Authorization: `Bearer ${env.RECALL_API_KEY}` },
+        headers: { Authorization: `Bearer ${recallKey}` },
     })
 
     // Pass the body + status through unchanged so the client sees Recall's own responses/errors.

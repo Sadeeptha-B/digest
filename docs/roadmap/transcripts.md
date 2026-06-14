@@ -171,10 +171,12 @@ YouTube videos/articles into cards), **not** Recall.ai the meeting-bot API.
 - **Integration pattern (shipped):** For the current video,
   `GET /cards?source_url_contains=<videoId>` → fetch the card → render `chunks` in the **"Summary"
   tab** next to Transcript. Served through the existing **same-origin Cloudflare Pages Functions
-  proxy** ([`functions/api/recall/`](../../functions/api/recall)), which injects the key from the
-  `RECALL_API_KEY` env secret — the browser never sees it, and the tab is hidden unless the server
-  reports the key is configured (`GET /api/recall/status`). This supersedes the "home-server proxy"
-  idea below: Digest already has a secret-holding backend, so no separate server is needed.
+  proxy** ([`functions/api/recall/`](../../functions/api/recall)), which injects a **per-user** key
+  the browser never sees, stored in a server-side HttpOnly cookie; the tab is hidden unless that key
+  is configured (`GET /api/recall/status`). Each user brings their own key — there is no shared
+  server key (see [ADR 0009](../decisions/0009-bring-your-own-recall-key.md)). This supersedes the
+  "home-server proxy" idea below: Digest already has a secret-holding backend, so no separate server
+  is needed.
 - **Cost:** Whatever your Recall plan is; the API itself adds no per-call fee documented.
 - **Concerns:**
   - **Key sensitivity:** the `sk_` key grants read access to your **entire** knowledge base

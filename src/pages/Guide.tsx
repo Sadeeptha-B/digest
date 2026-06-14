@@ -128,6 +128,33 @@ export function Guide() {
         </ul>
       </Section>
 
+      <Section title="AI summaries from Recall (optional)">
+        <p>
+          If you use{' '}
+          <a
+            href="https://www.recall.it"
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent-400 hover:underline"
+          >
+            Recall
+          </a>{' '}
+          (getrecall.ai) to save and summarise videos, Digest can show those AI summaries beside the
+          player on the watch page — with <span className="text-zinc-200">click-to-seek
+          timestamps</span> that jump to the moment each point refers to.
+        </p>
+        <p className="mt-3">
+          It’s opt-in and per-person: paste <em>your own</em> Recall API key in{' '}
+          <span className="text-zinc-200">Settings</span>, and a{' '}
+          <span className="text-zinc-200">Summary</span> tab appears on videos you’ve saved in
+          Recall. There’s no shared key — leave it unset and the tab simply doesn’t show. Because a
+          Recall key grants read access to your <em>whole</em> Recall library, it’s held{' '}
+          <span className="text-zinc-200">server-side in a secure cookie this page can’t read</span>,
+          and Digest only ever <span className="text-zinc-200">reads</span> your summaries — it never
+          edits or deletes anything in Recall.
+        </p>
+      </Section>
+
       <Section title="What Digest doesn’t do">
         <ul className="list-disc space-y-1.5 pl-5">
           <li>Sync your library across devices — each browser is independent.</li>
@@ -139,7 +166,7 @@ export function Guide() {
       </Section>
 
       <p className="mt-10 text-sm text-zinc-500">
-        Manage sign-in, your API key, the focus timer, and clearing data from{' '}
+        Manage sign-in, your YouTube and Recall keys, the focus timer, and clearing data from{' '}
         <span className="text-zinc-300">Settings</span> (the gear in the header).
       </p>
     </div>

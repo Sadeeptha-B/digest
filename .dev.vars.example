@@ -6,7 +6,5 @@
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
-# Optional: getrecall.ai (Recall) API key for the "Summary" tab. Grants read access to your whole
-# Recall knowledge base, so it lives only here / in the Pages project secrets — never in the browser.
-# Get one from Recall → Settings → API & MCP. Leave blank to hide the Summary tab.
-RECALL_API_KEY=
+# Note: getrecall.ai (Recall) needs no server secret. The "Summary" tab is per-user — each user
+# brings their own Recall key from Settings, stored in a server-side HttpOnly cookie (see ADR 0009).

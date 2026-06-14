@@ -21,247 +21,250 @@ const ENDED = 0
 const PLAYING = 1
 
 export function Watch() {
-  const { videoId = '' } = useParams()
-  const [search] = useSearchParams()
-  const listId = search.get('list') ?? ''
-  const navigate = useNavigate()
+    const { videoId = '' } = useParams()
+    const [search] = useSearchParams()
+    const listId = search.get('list') ?? ''
+    const navigate = useNavigate()
 
-  const playlist = useStore((s) => s.playlists.find((p) => p.id === listId))
-  const video = useStore((s) => s.videos[videoId])
-  const [tab, setTab] = useState<Tab>('transcript')
-  const setWatched = useStore((s) => s.setWatched)
-  const setPosition = useStore((s) => s.setPosition)
-  const getNextVideoId = useStore((s) => s.getNextVideoId)
-  const recallConfigured = useStore((s) => s.recallConfigured)
-  const pomodoroLengthMin = useStore((s) => s.settings.pomodoroLengthMin)
-  const pomodoroResetThresholdMin = useStore((s) => s.settings.pomodoroResetThresholdMin ?? 5)
+    const playlist = useStore((s) => s.playlists.find((p) => p.id === listId))
+    const video = useStore((s) => s.videos[videoId])
+    const [tab, setTab] = useState<Tab>('transcript')
+    const setWatched = useStore((s) => s.setWatched)
+    const setPosition = useStore((s) => s.setPosition)
+    const getNextVideoId = useStore((s) => s.getNextVideoId)
+    const recallConfigured = useStore((s) => s.recallConfigured)
+    const pomodoroLengthMin = useStore((s) => s.settings.pomodoroLengthMin)
+    const pomodoroResetThresholdMin = useStore((s) => s.settings.pomodoroResetThresholdMin ?? 5)
 
-  // Surface the video title + channel in the shared page header (centered).
-  usePageTitle(video?.title ?? null, video?.channelTitle || undefined)
+    useEffect(() => {
+        if (!recallConfigured && tab === 'summary') setTab('transcript')
+    }, [recallConfigured, tab])
 
-  const playerRef = useRef<YouTubePlayer | null>(null)
-  // keep the latest videoId for the polling interval's closure
-  const videoIdRef = useRef(videoId)
-  videoIdRef.current = videoId
+    // Surface the video title + channel in the shared page header (centered).
+    usePageTitle(video?.title ?? null, video?.channelTitle || undefined)
 
-  // Video duration (seconds), read from the player. 0 until known; reset between videos.
-  const [durationSec, setDurationSec] = useState(0)
-  useEffect(() => setDurationSec(0), [videoId])
-  const pomodoroEnabled = durationSec > POMODORO_MIN_DURATION
+    const playerRef = useRef<YouTubePlayer | null>(null)
+    // keep the latest videoId for the polling interval's closure
+    const videoIdRef = useRef(videoId)
+    videoIdRef.current = videoId
 
-  // Periodically persist playback position so we can resume later.
-  useEffect(() => {
-    const timer = window.setInterval(async () => {
-      const player = playerRef.current
-      if (!player) return
-      try {
-        const state = await player.getPlayerState()
-        if (state === PLAYING) {
-          const t = await player.getCurrentTime()
-          if (typeof t === 'number' && t > 0) setPosition(videoIdRef.current, Math.floor(t))
-        }
-      } catch {
-        /* player not ready */
-      }
-    }, 5000)
-    return () => window.clearInterval(timer)
-  }, [setPosition])
+    // Video duration (seconds), read from the player. 0 until known; reset between videos.
+    const [durationSec, setDurationSec] = useState(0)
+    useEffect(() => setDurationSec(0), [videoId])
+    const pomodoroEnabled = durationSec > POMODORO_MIN_DURATION
 
-  const goToNext = useCallback(() => {
-    const next = getNextVideoId(listId, videoId)
-    if (next) navigate(`/watch/${next}?list=${listId}`)
-  }, [getNextVideoId, listId, videoId, navigate])
+    // Periodically persist playback position so we can resume later.
+    useEffect(() => {
+        const timer = window.setInterval(async () => {
+            const player = playerRef.current
+            if (!player) return
+            try {
+                const state = await player.getPlayerState()
+                if (state === PLAYING) {
+                    const t = await player.getCurrentTime()
+                    if (typeof t === 'number' && t > 0) setPosition(videoIdRef.current, Math.floor(t))
+                }
+            } catch {
+                /* player not ready */
+            }
+        }, 5000)
+        return () => window.clearInterval(timer)
+    }, [setPosition])
 
-  // Mark watched and immediately advance — this is what prevents YouTube's end-screen
-  // related-video grid from ever taking over.
-  const finishVideo = useCallback(() => {
-    setWatched(videoId, true)
-    setPosition(videoId, 0)
-    goToNext()
-  }, [videoId, setWatched, setPosition, goToNext])
+    const goToNext = useCallback(() => {
+        const next = getNextVideoId(listId, videoId)
+        if (next) navigate(`/watch/${next}?list=${listId}`)
+    }, [getNextVideoId, listId, videoId, navigate])
 
-  const pomodoro = usePomodoro({
-    videoId,
-    playerRef,
-    durationSec,
-    pomodoroLengthSec: pomodoroLengthMin * 60,
-    resetThresholdSec: pomodoroResetThresholdMin * 60,
-    enabled: pomodoroEnabled,
-    onSessionEnd: finishVideo,
-  })
-  const { handlePlayerState, handleEnded } = pomodoro
+    // Mark watched and immediately advance — this is what prevents YouTube's end-screen
+    // related-video grid from ever taking over.
+    const finishVideo = useCallback(() => {
+        setWatched(videoId, true)
+        setPosition(videoId, 0)
+        goToNext()
+    }, [videoId, setWatched, setPosition, goToNext])
 
-  const onReady = useCallback(
-    async (e: YouTubeEvent) => {
-      playerRef.current = e.target
-      const resume = useStore.getState().progress[videoId]
-      if (resume && !resume.watched && resume.lastPositionSec > 5) {
-        e.target.seekTo(resume.lastPositionSec, true)
-      }
-      try {
-        const d = await e.target.getDuration()
-        if (typeof d === 'number' && d > 0) setDurationSec(d)
-      } catch {
-        /* duration not ready yet; falls back to the first PLAYING event */
-      }
-    },
-    [videoId],
-  )
+    const pomodoro = usePomodoro({
+        videoId,
+        playerRef,
+        durationSec,
+        pomodoroLengthSec: pomodoroLengthMin * 60,
+        resetThresholdSec: pomodoroResetThresholdMin * 60,
+        enabled: pomodoroEnabled,
+        onSessionEnd: finishVideo,
+    })
+    const { handlePlayerState, handleEnded } = pomodoro
 
-  const onStateChange = useCallback(
-    async (e: YouTubeEvent) => {
-      if (e.data === ENDED) {
-        // Let an active focus session play its 3s offramp before advancing; otherwise advance now.
-        if (!handleEnded()) finishVideo()
-        return
-      }
-      if (e.data === PLAYING && durationSec === 0) {
-        try {
-          const d = await e.target.getDuration()
-          if (typeof d === 'number' && d > 0) setDurationSec(d)
-        } catch {
-          /* still not ready */
-        }
-      }
-      handlePlayerState(e.data)
-    },
-    [durationSec, handleEnded, handlePlayerState, finishVideo],
-  )
-
-  if (!video) {
-    return (
-      <div className="text-center text-sm text-zinc-500">
-        Video not loaded.{' '}
-        <Link to="/" className="text-accent-400 hover:underline">
-          Back to library
-        </Link>
-      </div>
+    const onReady = useCallback(
+        async (e: YouTubeEvent) => {
+            playerRef.current = e.target
+            const resume = useStore.getState().progress[videoId]
+            if (resume && !resume.watched && resume.lastPositionSec > 5) {
+                e.target.seekTo(resume.lastPositionSec, true)
+            }
+            try {
+                const d = await e.target.getDuration()
+                if (typeof d === 'number' && d > 0) setDurationSec(d)
+            } catch {
+                /* duration not ready yet; falls back to the first PLAYING event */
+            }
+        },
+        [videoId],
     )
-  }
 
-  const hasNext = Boolean(getNextVideoId(listId, videoId))
+    const onStateChange = useCallback(
+        async (e: YouTubeEvent) => {
+            if (e.data === ENDED) {
+                // Let an active focus session play its 3s offramp before advancing; otherwise advance now.
+                if (!handleEnded()) finishVideo()
+                return
+            }
+            if (e.data === PLAYING && durationSec === 0) {
+                try {
+                    const d = await e.target.getDuration()
+                    if (typeof d === 'number' && d > 0) setDurationSec(d)
+                } catch {
+                    /* still not ready */
+                }
+            }
+            handlePlayerState(e.data)
+        },
+        [durationSec, handleEnded, handlePlayerState, finishVideo],
+    )
 
-  return (
-    <div className="mx-auto grid max-w-[1700px] gap-6 lg:grid-cols-[minmax(0,1fr)_402px]">
-      {/* On large screens the column is one screenful tall: the video flexes to fill whatever
+    if (!video) {
+        return (
+            <div className="text-center text-sm text-zinc-500">
+                Video not loaded.{' '}
+                <Link to="/" className="text-accent-400 hover:underline">
+                    Back to library
+                </Link>
+            </div>
+        )
+    }
+
+    const hasNext = Boolean(getNextVideoId(listId, videoId))
+
+    return (
+        <div className="mx-auto grid max-w-[1700px] gap-6 lg:grid-cols-[minmax(0,1fr)_402px]">
+            {/* On large screens the column is one screenful tall: the video flexes to fill whatever
           space is left after the Pomodoro + focus widgets, so they're always visible. */}
-      <div className="flex min-w-0 flex-col lg:h-[calc(100vh-7rem)]">
-        <div className="mb-3 flex shrink-0 items-center gap-2">
-          <Link
-            to={playlist ? `/playlist/${playlist.id}` : '/'}
-            className="rounded-lg p-2 text-zinc-400 hover:bg-ink-800 hover:text-white"
-            aria-label="Back"
-          >
-            <BackIcon className="h-5 w-5" />
-          </Link>
-          <span className="truncate text-sm text-zinc-400">
-            {playlist ? playlist.title : 'Saved videos'}
-          </span>
+            <div className="flex min-w-0 flex-col lg:h-[calc(100vh-7rem)]">
+                <div className="mb-3 flex shrink-0 items-center gap-2">
+                    <Link
+                        to={playlist ? `/playlist/${playlist.id}` : '/'}
+                        className="rounded-lg p-2 text-zinc-400 hover:bg-ink-800 hover:text-white"
+                        aria-label="Back"
+                    >
+                        <BackIcon className="h-5 w-5" />
+                    </Link>
+                    <span className="truncate text-sm text-zinc-400">
+                        {playlist ? playlist.title : 'Saved videos'}
+                    </span>
+                </div>
+
+                <div className="flex min-h-0 flex-1 items-center justify-center lg:min-h-[18rem]">
+                    <div className="aspect-video max-h-full w-full overflow-hidden rounded-xl bg-black lg:h-full lg:w-auto lg:max-w-full">
+                        <YouTube
+                            key={videoId}
+                            videoId={videoId}
+                            className="h-full w-full"
+                            iframeClassName="h-full w-full"
+                            opts={{
+                                width: '100%',
+                                height: '100%',
+                                host: 'https://www.youtube-nocookie.com',
+                                playerVars: {
+                                    rel: 0,
+                                    autoplay: 1,
+                                    modestbranding: 1,
+                                    playsinline: 1,
+                                    cc_load_policy: 1,
+                                    cc_lang_pref: 'en',
+                                },
+                            }}
+                            onReady={onReady}
+                            onStateChange={onStateChange}
+                        />
+                    </div>
+                </div>
+
+                {pomodoroEnabled && (
+                    <PomodoroTimeline
+                        view={pomodoro.view}
+                        onPause={pomodoro.pause}
+                        onResume={pomodoro.resume}
+                        onSkipBreak={pomodoro.skipBreak}
+                    />
+                )}
+
+                <FocusPanel />
+
+                <div className="mt-3 flex shrink-0 justify-end gap-2">
+                    <button
+                        onClick={() => setWatched(videoId, true)}
+                        className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
+                    >
+                        Mark watched
+                    </button>
+                    {hasNext && (
+                        <button
+                            onClick={goToNext}
+                            className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500"
+                        >
+                            Next ›
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            <aside className="flex flex-col rounded-xl border border-ink-700 bg-ink-900/40 p-3 lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
+                <div className="mb-2 flex gap-1 border-b border-ink-800">
+                    <TabButton active={tab === 'transcript'} onClick={() => setTab('transcript')}>
+                        Transcript
+                    </TabButton>
+                    {recallConfigured && (
+                        <TabButton active={tab === 'summary'} onClick={() => setTab('summary')}>
+                            Summary
+                        </TabButton>
+                    )}
+                    <TabButton active={tab === 'stats'} onClick={() => setTab('stats')}>
+                        Stats
+                    </TabButton>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-hidden">
+                    {tab === 'stats' ? (
+                        <SessionStatsPanel video={video} />
+                    ) : tab === 'summary' ? (
+                        <SummaryPanel video={video} playerRef={playerRef} />
+                    ) : (
+                        <TranscriptPanel video={video} playerRef={playerRef} />
+                    )}
+                </div>
+            </aside>
         </div>
-
-        <div className="flex min-h-0 flex-1 items-center justify-center lg:min-h-[18rem]">
-          <div className="aspect-video max-h-full w-full overflow-hidden rounded-xl bg-black lg:h-full lg:w-auto lg:max-w-full">
-            <YouTube
-              key={videoId}
-              videoId={videoId}
-              className="h-full w-full"
-              iframeClassName="h-full w-full"
-              opts={{
-                width: '100%',
-                height: '100%',
-                host: 'https://www.youtube-nocookie.com',
-                playerVars: {
-                  rel: 0,
-                  autoplay: 1,
-                  modestbranding: 1,
-                  playsinline: 1,
-                  cc_load_policy: 1,
-                  cc_lang_pref: 'en',
-                },
-              }}
-              onReady={onReady}
-              onStateChange={onStateChange}
-            />
-          </div>
-        </div>
-
-        {pomodoroEnabled && (
-          <PomodoroTimeline
-            view={pomodoro.view}
-            onPause={pomodoro.pause}
-            onResume={pomodoro.resume}
-            onSkipBreak={pomodoro.skipBreak}
-          />
-        )}
-
-        <FocusPanel />
-
-        <div className="mt-3 flex shrink-0 justify-end gap-2">
-          <button
-            onClick={() => setWatched(videoId, true)}
-            className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
-          >
-            Mark watched
-          </button>
-          {hasNext && (
-            <button
-              onClick={goToNext}
-              className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500"
-            >
-              Next ›
-            </button>
-          )}
-        </div>
-      </div>
-
-      <aside className="flex flex-col rounded-xl border border-ink-700 bg-ink-900/40 p-3 lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
-        <div className="mb-2 flex gap-1 border-b border-ink-800">
-          <TabButton active={tab === 'transcript'} onClick={() => setTab('transcript')}>
-            Transcript
-          </TabButton>
-          {recallConfigured && (
-            <TabButton active={tab === 'summary'} onClick={() => setTab('summary')}>
-              Summary
-            </TabButton>
-          )}
-          <TabButton active={tab === 'stats'} onClick={() => setTab('stats')}>
-            Stats
-          </TabButton>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-hidden">
-          {tab === 'stats' ? (
-            <SessionStatsPanel video={video} />
-          ) : tab === 'summary' ? (
-            <SummaryPanel video={video} playerRef={playerRef} />
-          ) : (
-            <TranscriptPanel video={video} playerRef={playerRef} />
-          )}
-        </div>
-      </aside>
-    </div>
-  )
+    )
 }
 
 function TabButton({
-  active,
-  onClick,
-  children,
+    active,
+    onClick,
+    children,
 }: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
+    active: boolean
+    onClick: () => void
+    children: React.ReactNode
 }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium ${
-        active
-          ? 'border-accent-500 text-white'
-          : 'border-transparent text-zinc-400 hover:text-zinc-200'
-      }`}
-    >
-      {children}
-    </button>
-  )
+    return (
+        <button
+            onClick={onClick}
+            className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium ${active
+                    ? 'border-accent-500 text-white'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                }`}
+        >
+            {children}
+        </button>
+    )
 }

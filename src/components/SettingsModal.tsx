@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { signOut, tokenIsValid } from '../lib/oauth'
 import { clearApiKey } from '../lib/apiKey'
+import { clearRecallKey } from '../lib/recallKey'
 import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
 import { useApiKey } from '../hooks/useApiKey'
+import { useRecallKey } from '../hooks/useRecallKey'
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
     const accessToken = useStore((s) => s.accessToken)
@@ -18,15 +20,35 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
     const [key, setKey] = useState('')
     const [showKey, setShowKey] = useState(false)
+    const [recallKey, setRecallKey] = useState('')
     const [confirmClear, setConfirmClear] = useState(false)
+    const [clearBusy, setClearBusy] = useState(false)
+    const [clearError, setClearError] = useState<string | null>(null)
 
     const signedIn = hasSignedIn || tokenIsValid(accessToken)
     const { busy: authBusy, error: authError, start: handleSignIn } = useGoogleSignIn()
     const { configured: keyConfigured, busy: keyBusy, error: keyError, save: saveKey, remove: removeKey } = useApiKey()
+    const {
+        configured: recallConfigured,
+        busy: recallBusy,
+        error: recallError,
+        save: saveRecall,
+        remove: removeRecall,
+    } = useRecallKey()
 
-    function handleClearData() {
+    async function handleClearData() {
+        setClearError(null)
+        setClearBusy(true)
         if (signedIn) signOut() // revoke the token before wiping everything
-        void clearApiKey().catch(() => { }) // clear the server-side key cookie too
+        const results = await Promise.allSettled([
+            clearApiKey(), // clear the server-side YouTube key cookie too
+            clearRecallKey(), // and the Recall key cookie
+        ])
+        if (results.some((result) => result.status === 'rejected')) {
+            setClearError('Could not clear all server-side credentials. Try again while online.')
+            setClearBusy(false)
+            return
+        }
         reset()
         onClose()
     }
@@ -59,37 +81,37 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
                 {/* --- Google account --- */}
                 <>
-                        <label className="mt-4 block text-sm text-zinc-400">Google account</label>
-                        <div className="mt-2 flex items-center gap-2">
-                            {signedIn ? (
-                                <>
-                                    <span className="flex items-center gap-1.5 text-sm text-accent-400">
-                                        <span className="h-2 w-2 rounded-full bg-accent-400" /> Signed in
-                                    </span>
-                                    <button
-                                        onClick={() => signOut()}
-                                        className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
-                                    >
-                                        Sign out
-                                    </button>
-                                </>
-                            ) : (
+                    <label className="mt-4 block text-sm text-zinc-400">Google account</label>
+                    <div className="mt-2 flex items-center gap-2">
+                        {signedIn ? (
+                            <>
+                                <span className="flex items-center gap-1.5 text-sm text-accent-400">
+                                    <span className="h-2 w-2 rounded-full bg-accent-400" /> Signed in
+                                </span>
                                 <button
-                                    onClick={handleSignIn}
-                                    disabled={authBusy}
-                                    className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
+                                    onClick={() => signOut()}
+                                    className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
                                 >
-                                    {authBusy ? 'Signing in…' : 'Sign in with Google'}
+                                    Sign out
                                 </button>
-                            )}
-                        </div>
-                        <p className="mt-1.5 text-xs text-zinc-500">
-                            Unlocks private playlists and transcripts. No API key required when signed in.
-                            {!signedIn && ' Sign-in is limited to pre-approved Google accounts (app in “Testing” mode).'}
-                        </p>
-                        {authError && <p className="mt-1 text-sm text-rose-400">{authError}</p>}
+                            </>
+                        ) : (
+                            <button
+                                onClick={handleSignIn}
+                                disabled={authBusy}
+                                className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
+                            >
+                                {authBusy ? 'Signing in…' : 'Sign in with Google'}
+                            </button>
+                        )}
+                    </div>
+                    <p className="mt-1.5 text-xs text-zinc-500">
+                        Unlocks private playlists and transcripts. No API key required when signed in.
+                        {!signedIn && ' Sign-in is limited to pre-approved Google accounts (app in “Testing” mode).'}
+                    </p>
+                    {authError && <p className="mt-1 text-sm text-rose-400">{authError}</p>}
 
-                        <hr className="my-4 border-ink-700" />
+                    <hr className="my-4 border-ink-700" />
                 </>
 
                 {/* --- API key (only relevant when not signed in) --- */}
@@ -152,6 +174,62 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
                 <hr className="my-4 border-ink-700" />
 
+                {/* --- Recall API key (bring-your-own getrecall.ai key for AI summaries) --- */}
+                <label className="block text-sm text-zinc-400">Recall API key</label>
+                {recallConfigured && (
+                    <div className="mt-2 flex items-center gap-2">
+                        <span className="flex items-center gap-1.5 text-sm text-accent-400">
+                            <span className="h-2 w-2 rounded-full bg-accent-400" /> Key configured
+                        </span>
+                        <button
+                            onClick={() => void removeRecall()}
+                            disabled={recallBusy}
+                            className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800 disabled:opacity-40"
+                        >
+                            Remove
+                        </button>
+                    </div>
+                )}
+                <form
+                    className="mt-2 flex gap-2"
+                    onSubmit={async (e) => {
+                        e.preventDefault()
+                        if (recallKey.trim() && (await saveRecall(recallKey))) setRecallKey('')
+                    }}
+                >
+                    <input
+                        type="password"
+                        value={recallKey}
+                        onChange={(e) => setRecallKey(e.target.value)}
+                        placeholder={recallConfigured ? 'Replace key…' : 'sk_…'}
+                        disabled={recallBusy}
+                        className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500 disabled:opacity-50"
+                    />
+                    <button
+                        type="submit"
+                        disabled={recallBusy || !recallKey.trim()}
+                        className="rounded-lg bg-accent-600 px-3 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
+                    >
+                        {recallBusy ? 'Checking…' : 'Save'}
+                    </button>
+                </form>
+                <p className="mt-1.5 text-xs text-zinc-500">
+                    Shows AI summaries from your{' '}
+                    <a
+                        href="https://www.recall.it"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent-400 hover:underline"
+                    >
+                        Recall
+                    </a>{' '}
+                    knowledge base on the watch page. This key grants read access to your entire Recall
+                    library, so it's stored server-side and never exposed to the browser.
+                </p>
+                {recallError && <p className="mt-1 text-sm text-rose-400">{recallError}</p>}
+
+                <hr className="my-4 border-ink-700" />
+
                 {/* --- Pomodoro focus timer --- */}
                 <label className="block text-sm text-zinc-400">Pomodoro length</label>
                 <div className="mt-2 flex items-center gap-2">
@@ -203,18 +281,21 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     Removes all lists, videos, watch progress, cached transcripts, and credentials from this
                     browser, resetting the app to a fresh install.
                 </p>
+                {clearError && <p className="mt-1 text-sm text-rose-400">{clearError}</p>}
                 {confirmClear ? (
                     <div className="mt-2 flex items-center gap-2">
                         <span className="text-sm text-rose-400">This can't be undone.</span>
                         <button
-                            onClick={handleClearData}
+                            onClick={() => void handleClearData()}
+                            disabled={clearBusy}
                             className="ml-auto rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-500"
                         >
-                            Clear everything
+                            {clearBusy ? 'Clearing…' : 'Clear everything'}
                         </button>
                         <button
                             onClick={() => setConfirmClear(false)}
-                            className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
+                            disabled={clearBusy}
+                            className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800 disabled:opacity-40"
                         >
                             Cancel
                         </button>

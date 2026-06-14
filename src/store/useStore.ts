@@ -27,8 +27,9 @@ interface StoreState {
     hasSignedIn: boolean
     /** cached transcripts keyed by videoId */
     transcripts: Record<string, TranscriptResult>
-    /** Whether the getrecall.ai integration is configured on the server. Probed on load (the key
-     *  lives only server-side); non-persisted, so it's always reconciled fresh. */
+    /** Whether this browser has a getrecall.ai key configured (the key lives in a server-side
+     *  HttpOnly cookie — see lib/recallKey.ts). Probed on load; non-persisted, so it's always
+     *  reconciled fresh. Gates the Summary tab and the Settings UI. */
     recallConfigured: boolean
 
     /** user-configurable preferences */

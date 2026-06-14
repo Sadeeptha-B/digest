@@ -8,6 +8,8 @@ import { useApiKey } from '../hooks/useApiKey'
  * ways in, both always available:
  *  - Sign in with Google (recommended) — unlocks private playlists, and needs no API key.
  *  - Use a public API key — read-only access to public/unlisted content, no sign-in.
+ * Plus a muted aside pointing to the optional, per-user getrecall.ai summary integration, which is
+ * configured later in Settings (not a way in, so it doesn't compete with the primary CTAs).
  */
 export function ApiKeyGate() {
     const [showKey, setShowKey] = useState(false)
@@ -114,6 +116,19 @@ export function ApiKeyGate() {
                     </>
                 )}
             </div>
+
+            <p className="mt-4 text-center text-xs text-zinc-500">
+                Use{' '}
+                <a
+                    href="https://www.recall.it"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent-400 hover:underline"
+                >
+                    Recall
+                </a>
+                ? Add your own Recall key in Settings later to see AI summaries while you watch.
+            </p>
         </div>
     )
 }

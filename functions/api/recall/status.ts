@@ -1,12 +1,10 @@
 import { json } from '../../_lib/http'
+import { readRecallKey } from '../../_lib/recallkey'
 
-// Reports whether the Recall integration is configured on the server (i.e. RECALL_API_KEY is set),
-// so the SPA knows whether to show the Summary tab. The key itself is never exposed.
+// Reports whether THIS browser has a Recall key configured, so the SPA knows whether to show the
+// Summary tab. The integration is per-user (no shared server key) — see ADR 0009. The key itself
+// (the digest_recall_key cookie) is never exposed; only this boolean is returned.
 
-interface Env {
-    RECALL_API_KEY?: string
-}
-
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
-    return json({ configured: Boolean(env.RECALL_API_KEY) })
+export const onRequestGet: PagesFunction = async ({ request }) => {
+    return json({ configured: Boolean(readRecallKey(request)) })
 }
