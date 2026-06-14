@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { GearIcon } from './Icons'
+import { GearIcon, HelpIcon } from './Icons'
 import { SettingsModal } from './SettingsModal'
 import { useStore } from '../store/useStore'
 import { ACCENT_THEMES, applyAccentTheme, DEFAULT_ACCENT_THEME } from '../lib/themes'
@@ -54,6 +54,14 @@ export function Layout({ children }: { children: ReactNode }) {
                 )
               })}
             </div>
+            <Link
+              to="/guide"
+              className="rounded-lg p-2 text-zinc-400 hover:bg-ink-800 hover:text-white"
+              aria-label="User guide"
+              title="User guide"
+            >
+              <HelpIcon className="h-5 w-5" />
+            </Link>
             <button
               onClick={() => setSettingsOpen(true)}
               className="rounded-lg p-2 text-zinc-400 hover:bg-ink-800 hover:text-white"

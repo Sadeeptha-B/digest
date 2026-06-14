@@ -61,6 +61,14 @@ export const RestoreIcon = ({ className = 'h-4 w-4' }: P) => (
   </svg>
 )
 
+export const HelpIcon = ({ className = 'h-4 w-4' }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4" />
+    <path d="M12 17h.01" />
+  </svg>
+)
+
 export const PauseIcon = ({ className = 'h-4 w-4' }: P) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
     <rect x="6" y="5" width="4" height="14" rx="1" />

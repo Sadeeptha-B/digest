@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
 import { useApiKey } from '../hooks/useApiKey'
 
@@ -17,7 +18,12 @@ export function ApiKeyGate() {
     return (
         <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center px-6 py-16">
             <h1 className="text-2xl font-semibold text-white">Digest</h1>
-            <p className="mt-1 text-sm text-zinc-400">Distraction-free YouTube playlists.</p>
+            <p className="mt-1 text-sm text-zinc-400">
+                Distraction-free YouTube playlists.{' '}
+                <Link to="/guide" className="text-accent-400 hover:underline">
+                    How it works
+                </Link>
+            </p>
 
             <div className="mt-8 rounded-xl border border-ink-700 bg-ink-850 p-5">
                 <h2 className="text-base font-medium text-white">Sign in to get started</h2>

@@ -10,6 +10,7 @@ import { ApiKeyGate } from './components/ApiKeyGate'
 import { Library } from './pages/Library'
 import { PlaylistDetail } from './pages/PlaylistDetail'
 import { Watch } from './pages/Watch'
+import { Guide } from './pages/Guide'
 
 export default function App() {
     const apiKeyConfigured = useStore((s) => s.apiKeyConfigured)
@@ -75,9 +76,17 @@ export default function App() {
     }
 
     // Show onboarding only for a genuinely fresh start: empty library and no live session/key.
-    // Credentials (for importing) can always be added later from Settings.
+    // Credentials (for importing) can always be added later from Settings. The user guide stays
+    // reachable even here, so a first-time visitor can read what Digest is before committing.
     const ready = hasSignedIn || apiKeyConfigured || hasLibrary
-    if (!ready) return <ApiKeyGate />
+    if (!ready) {
+        return (
+            <Routes>
+                <Route path="/guide" element={<Layout><Guide /></Layout>} />
+                <Route path="*" element={<ApiKeyGate />} />
+            </Routes>
+        )
+    }
 
     return (
         <Layout>
@@ -85,6 +94,7 @@ export default function App() {
                 <Route path="/" element={<Library />} />
                 <Route path="/playlist/:playlistId" element={<PlaylistDetail />} />
                 <Route path="/watch/:videoId" element={<Watch />} />
+                <Route path="/guide" element={<Guide />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </Layout>
