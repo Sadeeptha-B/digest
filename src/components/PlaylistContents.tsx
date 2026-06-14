@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { isConsentRequired, REAUTH_MESSAGE, resolveAuth } from '../lib/oauth'
-import { syncPlaylist } from '../lib/playlistSync'
+import { refreshRestoredVideo, syncPlaylist } from '../lib/playlistSync'
 import { YouTubeApiError } from '../lib/youtube'
 import { timeAgo } from '../lib/time'
-import { CloseIcon, PlayIcon, RefreshIcon, TrashIcon } from './Icons'
+import { CloseIcon, PlayIcon, RefreshIcon, RestoreIcon, TrashIcon } from './Icons'
 import { DragHandle, SortableList, useSortableRow } from './Sortable'
 import { VideoThumbnail } from './VideoThumbnail'
 
 /** Opening a playlist older than this triggers a silent background sync. */
-const AUTOSYNC_STALE_MS = 24 * 60 * 60 * 1000 // 6 hours
+const AUTOSYNC_STALE_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 export function PlaylistContents({
     playlistId,
@@ -22,12 +22,21 @@ export function PlaylistContents({
     const playlist = useStore((s) => s.playlists.find((p) => p.id === playlistId))
     const progress = useStore((s) => s.progress)
     const reorderVideos = useStore((s) => s.reorderVideos)
+    const restoreVideoToPlaylist = useStore((s) => s.restoreVideoToPlaylist)
     const navigate = useNavigate()
 
     const [refreshing, setRefreshing] = useState(false)
     const [refreshError, setRefreshError] = useState<string | null>(null)
+    const [showRemoved, setShowRemoved] = useState(false)
 
     const ytPlaylistId = playlist?.ytPlaylistId
+
+    // Restore is local-first and instant; the metadata refresh runs in the background and is allowed
+    // to fail (e.g. the video was removed/made private upstream) without blocking the restore.
+    function handleRestore(videoId: string) {
+        restoreVideoToPlaylist(playlistId, videoId)
+        void refreshRestoredVideo(videoId)
+    }
 
     async function handleRefresh({ silent = false } = {}) {
         if (!playlist || !ytPlaylistId || refreshing) return
@@ -123,7 +132,55 @@ export function PlaylistContents({
                     </ul>
                 </SortableList>
             </div>
+
+            {ytPlaylistId && playlist.removedVideoIds.length > 0 && (
+                <div className="mt-3 border-t border-ink-800 pt-3">
+                    <button
+                        onClick={() => setShowRemoved((v) => !v)}
+                        className="text-xs font-medium text-zinc-500 hover:text-zinc-300"
+                    >
+                        {showRemoved ? 'Hide' : 'Show'} removed ({playlist.removedVideoIds.length})
+                    </button>
+                    {showRemoved && (
+                        <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto scrollbar-slim">
+                            {playlist.removedVideoIds.map((videoId) => (
+                                <RemovedVideoRow
+                                    key={videoId}
+                                    videoId={videoId}
+                                    onRestore={() => handleRestore(videoId)}
+                                />
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            )}
         </div>
+    )
+}
+
+function RemovedVideoRow({ videoId, onRestore }: { videoId: string; onRestore: () => void }) {
+    const video = useStore((s) => s.videos[videoId])
+
+    return (
+        <li className="flex items-center gap-3 rounded-lg border border-transparent bg-ink-900/60 p-2">
+            <VideoThumbnail
+                thumbnailUrl={video?.thumbnailUrl}
+                className="relative aspect-video w-20 shrink-0 overflow-hidden rounded bg-ink-800 opacity-60"
+            />
+            <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-sm text-zinc-400">{video?.title ?? videoId}</p>
+                {video?.channelTitle && (
+                    <p className="truncate text-xs text-zinc-600">{video.channelTitle}</p>
+                )}
+            </div>
+            <button
+                onClick={onRestore}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-accent-400 hover:bg-ink-800"
+                aria-label="Restore video"
+            >
+                <RestoreIcon className="h-4 w-4" /> Restore
+            </button>
+        </li>
     )
 }
 

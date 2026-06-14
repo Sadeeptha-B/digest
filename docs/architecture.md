@@ -179,6 +179,45 @@ player is a plain IFrame embed, so viewing needs no credentials at all. A return
 lands straight in their library even with an expired session (offline-friendly); they only need to
 re-authenticate, from **Settings**, to import more.
 
+### 3.1 Playlist sync model — Digest owns the list, YouTube is a source
+
+A deliberate decision (over the alternative of mirroring YouTube as the source of truth): once a
+playlist is imported, **the local copy is authoritative**. The user's ordering and removals are
+sacred; YouTube is only ever a *source* to pull from. This is the natural fit because the app
+already centres on local editing (reorder, remove, the upstream-less `Saved videos` list), and
+because the `youtube.readonly` scope means edits could never be written back upstream anyway — so a
+true two-way mirror is impossible by construction.
+
+`syncPlaylist` ([`src/lib/playlistSync.ts`](../src/lib/playlistSync.ts)) re-fetches and reconciles
+via [`mergePlaylistContents`](../src/store/useStore.ts), which is **additive and edit-preserving**:
+
+- Videos still upstream are kept in the **user's** order; videos dropped from the upstream playlist
+  are removed — *unless* the user explicitly restored them (see below).
+- Genuinely-new upstream videos are appended.
+- A video the user removed locally is **tombstoned** (`Playlist.removedVideoIds`) so a later sync
+  won't resurrect it even though it's still upstream. Re-importing the playlist clears the
+  tombstones (a deliberate fresh start).
+- A video the user explicitly **restored** is **pinned** (`Playlist.restoredVideoIds`) so it
+  survives future syncs even after it's gone upstream. The pin is purely a repair-for-absence: once
+  a sync observes the video upstream again, the pin is dropped and normal sync rules resume. The two
+  sets are mutually exclusive: removing clears the pin and re-tombstones; restoring clears the
+  tombstone and pins.
+
+Tombstoned videos are reviewable and undoable: a **Show removed** section in
+[`PlaylistContents`](../src/components/PlaylistContents.tsx) lists them with a **Restore** action.
+Restore is **local-first and instant** (`restoreVideoToPlaylist` moves the id back and pins it,
+using the cached metadata) — it never depends on the network. A best-effort
+[`refreshRestoredVideo`](../src/lib/playlistSync.ts) then runs in the background to freshen the
+metadata; if the video is gone upstream (404 — deleted, made private, or pulled from the source) it
+flags the cached entry unavailable so it renders greyed, and every other failure (offline, expired
+session, no key) is swallowed so the restore always stands. Because the restore is pinned, it
+persists across the next sync rather than being dropped as "deleted upstream."
+
+Sync runs on demand (a Refresh button) and opportunistically: opening a playlist that hasn't synced
+in 24h triggers one silent background sync. Ownership is irrelevant to all of this — an imported
+public playlist you don't own is treated identically to one of your own (it's a snapshot you
+curate, not a live mirror).
+
 ---
 
 ## 4. Local development

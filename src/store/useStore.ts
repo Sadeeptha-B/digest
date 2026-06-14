@@ -72,8 +72,9 @@ interface StoreState {
     /**
      * Reconcile a stored playlist against a fresh fetch from YouTube. Preserves the user's video
      * order and local removals: retained videos keep their position, videos deleted upstream are
-     * dropped, and videos newly added upstream are appended. Also refreshes title/channel and
-     * stamps lastSyncedAt. (Video metadata is refreshed separately via upsertVideos.)
+     * dropped unless the user explicitly restored them locally, and videos newly added upstream are
+     * appended. Also refreshes title/channel and stamps lastSyncedAt. (Video metadata is refreshed
+     * separately via upsertVideos.)
      */
     mergePlaylistContents: (
         playlistId: string,
@@ -83,6 +84,10 @@ interface StoreState {
     reorderPlaylists: (orderedIds: string[]) => void
     reorderVideos: (playlistId: string, orderedVideoIds: string[]) => void
     removeVideoFromPlaylist: (playlistId: string, videoId: string) => void
+    /** Undo a local removal: move a tombstoned video back into the playlist (appended to the end),
+     *  clear its tombstone, and pin it (restoredVideoIds) so a later sync keeps it even if it's no
+     *  longer found upstream. No-op if the video isn't currently tombstoned. */
+    restoreVideoToPlaylist: (playlistId: string, videoId: string) => void
 
     setWatched: (videoId: string, watched: boolean) => void
     setPosition: (videoId: string, positionSec: number) => void
@@ -225,6 +230,8 @@ export const useStore = create<StoreState>()(
                             title: 'Saved videos',
                             channelTitle: '',
                             videoIds: [video.id],
+                            removedVideoIds: [],
+                            restoredVideoIds: [],
                             addedAt: Date.now(),
                             lastSyncedAt: Date.now(),
                         }
@@ -234,10 +241,10 @@ export const useStore = create<StoreState>()(
                     const playlists = existing.videoIds.includes(video.id)
                         ? s.playlists
                         : s.playlists.map((p) =>
-                              p.id === SAVED_VIDEOS_ID
-                                  ? { ...p, videoIds: [...p.videoIds, video.id] }
-                                  : p,
-                          )
+                            p.id === SAVED_VIDEOS_ID
+                                ? { ...p, videoIds: [...p.videoIds, video.id] }
+                                : p,
+                        )
                     return { videos, playlists }
                 }),
 
@@ -247,15 +254,32 @@ export const useStore = create<StoreState>()(
                     if (!existing) return s
                     const remoteSet = new Set(remote.videoIds)
                     const existingSet = new Set(existing.videoIds)
-                    // Keep the user's order, drop anything deleted upstream...
-                    const retained = existing.videoIds.filter((id) => remoteSet.has(id))
-                    // ...then append videos newly added upstream, in their YouTube order.
-                    const added = remote.videoIds.filter((id) => !existingSet.has(id))
+                    const tombstoned = new Set(existing.removedVideoIds)
+                    const restored = new Set(existing.restoredVideoIds)
+                    // Keep the user's order; drop videos gone upstream UNLESS the user explicitly
+                    // restored them (those are pinned to the local copy).
+                    const retained = existing.videoIds.filter(
+                        (id) => remoteSet.has(id) || restored.has(id),
+                    )
+                    // ...then append videos newly added upstream, in their YouTube order — but skip
+                    // any the user has removed locally (tombstones), so sync never resurrects them.
+                    const added = remote.videoIds.filter(
+                        (id) => !existingSet.has(id) && !tombstoned.has(id),
+                    )
+                    const videoIds = [...retained, ...added]
+                    const mergedSet = new Set(videoIds)
                     const merged: Playlist = {
                         ...existing,
                         title: remote.title,
                         channelTitle: remote.channelTitle,
-                        videoIds: [...retained, ...added],
+                        videoIds,
+                        // A pin only exists to protect a restore from being dropped while it's gone
+                        // upstream. Once a sync sees the video upstream again, the pin has served its
+                        // purpose — drop it so normal sync rules resume. Also drop pins whose video
+                        // is no longer present (defensive; removal already clears the pin).
+                        restoredVideoIds: existing.restoredVideoIds.filter(
+                            (id) => mergedSet.has(id) && !remoteSet.has(id),
+                        ),
                         lastSyncedAt: Date.now(),
                     }
                     return {
@@ -283,9 +307,35 @@ export const useStore = create<StoreState>()(
                 set((s) => ({
                     playlists: s.playlists.map((p) =>
                         p.id === playlistId
-                            ? { ...p, videoIds: p.videoIds.filter((id) => id !== videoId) }
+                            ? {
+                                ...p,
+                                videoIds: p.videoIds.filter((id) => id !== videoId),
+                                // Tombstone it so a later sync won't pull it back from upstream.
+                                removedVideoIds:
+                                    p.ytPlaylistId && !p.removedVideoIds.includes(videoId)
+                                        ? [...p.removedVideoIds, videoId]
+                                        : p.removedVideoIds,
+                                restoredVideoIds: p.restoredVideoIds.filter((id) => id !== videoId),
+                            }
                             : p,
                     ),
+                })),
+
+            restoreVideoToPlaylist: (playlistId, videoId) =>
+                set((s) => ({
+                    playlists: s.playlists.map((p) => {
+                        if (p.id !== playlistId || !p.removedVideoIds.includes(videoId)) return p
+                        return {
+                            ...p,
+                            removedVideoIds: p.removedVideoIds.filter((id) => id !== videoId),
+                            restoredVideoIds: p.restoredVideoIds.includes(videoId)
+                                ? p.restoredVideoIds
+                                : [...p.restoredVideoIds, videoId],
+                            videoIds: p.videoIds.includes(videoId)
+                                ? p.videoIds
+                                : [...p.videoIds, videoId],
+                        }
+                    }),
                 })),
 
             setWatched: (videoId, watched) =>
@@ -310,7 +360,7 @@ export const useStore = create<StoreState>()(
         }),
         {
             name: 'digest-store',
-            version: 6,
+            version: 8,
             // Persist everything except the short-lived access token (kept in memory only) and the
             // server-probed recallConfigured flag (always reconciled fresh on load).
             partialize: ({ accessToken: _omit, recallConfigured: _omitRecall, ...rest }) => rest,
@@ -319,6 +369,8 @@ export const useStore = create<StoreState>()(
             // stale secret from localStorage; the user re-enters it once to set the cookie.
             // v4 added settings.accentTheme; v5 added settings.pomodoroResetThresholdMin —
             // backfill both on older state. v6 added playlist.lastSyncedAt — backfill from addedAt.
+            // v7 added playlist.removedVideoIds (sync tombstones) — backfill to an empty array.
+            // v8 added playlist.restoredVideoIds so explicit restores survive later syncs.
             migrate: (persisted) => {
                 if (persisted && typeof persisted === 'object') {
                     const data = persisted as Record<string, unknown>
@@ -336,6 +388,8 @@ export const useStore = create<StoreState>()(
                             if (typeof p.lastSyncedAt !== 'number') {
                                 p.lastSyncedAt = typeof p.addedAt === 'number' ? p.addedAt : Date.now()
                             }
+                            if (!Array.isArray(p.removedVideoIds)) p.removedVideoIds = []
+                            if (!Array.isArray(p.restoredVideoIds)) p.restoredVideoIds = []
                         }
                     }
                 }

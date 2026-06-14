@@ -45,6 +45,8 @@ export function AddBar() {
             title: meta.title,
             channelTitle: meta.channelTitle,
             videoIds: videos.map((v) => v.id),
+            removedVideoIds: [],
+            restoredVideoIds: [],
             addedAt: Date.now(),
             lastSyncedAt: Date.now(),
         }
