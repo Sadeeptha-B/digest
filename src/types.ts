@@ -18,6 +18,8 @@ export interface Playlist {
   /** ordered list of Video ids; order = display/play order */
   videoIds: string[]
   addedAt: number
+  /** epoch ms of the last successful sync with YouTube. Equals addedAt right after import. */
+  lastSyncedAt: number
 }
 
 export interface Progress {

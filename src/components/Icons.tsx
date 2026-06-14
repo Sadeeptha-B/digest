@@ -49,6 +49,12 @@ export const CloseIcon = ({ className = 'h-4 w-4' }: P) => (
   </svg>
 )
 
+export const RefreshIcon = ({ className = 'h-4 w-4' }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
+  </svg>
+)
+
 export const PauseIcon = ({ className = 'h-4 w-4' }: P) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
     <rect x="6" y="5" width="4" height="14" rx="1" />

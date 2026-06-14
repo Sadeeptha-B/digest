@@ -10,12 +10,11 @@ import {
     type Auth,
     type MyPlaylist,
 } from '../lib/youtube'
-import { getValidToken, isConsentRequired, tokenIsValid } from '../lib/oauth'
+import { isConsentRequired, REAUTH_MESSAGE, resolveAuth, tokenIsValid } from '../lib/oauth'
 import { createId } from '../lib/id'
 import type { Playlist } from '../types'
 
 export function AddBar() {
-    const apiKeyConfigured = useStore((s) => s.apiKeyConfigured)
     const accessToken = useStore((s) => s.accessToken)
     const hasSignedIn = useStore((s) => s.hasSignedIn)
     const upsertVideos = useStore((s) => s.upsertVideos)
@@ -33,16 +32,6 @@ export function AddBar() {
     const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
 
     const signedIn = hasSignedIn || tokenIsValid(accessToken)
-    const reauthMessage = 'Your session expired — sign in again from Settings to import playlists.'
-
-    /** Ensure a valid token if the user has signed in; otherwise fetch anonymously (the proxy
-     *  falls back to the server-side API key). */
-    async function currentAuth(): Promise<Auth> {
-        if (!hasSignedIn && !accessToken) return { token: null }
-        const token = await getValidToken()
-        if (!token && !apiKeyConfigured) throw new Error(reauthMessage)
-        return { token: token?.value ?? null }
-    }
 
     async function importPlaylist(playlistId: string, auth: Auth) {
         const [meta, videos] = await Promise.all([
@@ -57,17 +46,18 @@ export function AddBar() {
             channelTitle: meta.channelTitle,
             videoIds: videos.map((v) => v.id),
             addedAt: Date.now(),
+            lastSyncedAt: Date.now(),
         }
         addPlaylist(playlist)
     }
 
     function reportError(err: unknown) {
-        if (err instanceof Error && err.message === reauthMessage) {
+        if (err instanceof Error && err.message === REAUTH_MESSAGE) {
             setError(err.message)
             return
         }
         if (isConsentRequired(err)) {
-            setError(reauthMessage)
+            setError(REAUTH_MESSAGE)
             return
         }
         if (err instanceof YouTubeApiError) {
@@ -91,7 +81,7 @@ export function AddBar() {
         }
         setBusy(true)
         try {
-            const auth = await currentAuth()
+            const auth = await resolveAuth()
             if (parsed.kind === 'playlist') {
                 await importPlaylist(parsed.playlistId, auth)
             } else {
@@ -111,7 +101,7 @@ export function AddBar() {
         setSelected(new Set())
         setPickerBusy(true)
         try {
-            const auth = await currentAuth()
+            const auth = await resolveAuth()
             if (!auth.token) {
                 setError('Sign in (Settings) to import your own playlists.')
                 return
@@ -140,7 +130,7 @@ export function AddBar() {
         setBusy(true)
         setImportProgress({ done: 0, total: ids.length })
         try {
-            const auth = await currentAuth()
+            const auth = await resolveAuth()
             const failures: string[] = []
             for (let i = 0; i < ids.length; i++) {
                 try {

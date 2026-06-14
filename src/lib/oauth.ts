@@ -1,5 +1,6 @@
 import { useStore } from '../store/useStore'
 import { AUTH_BASE } from './config'
+import type { Auth } from './youtube'
 import type { AccessToken } from '../types'
 
 // OAuth runs through same-origin Cloudflare Pages Functions (see /functions/auth). The browser
@@ -139,4 +140,20 @@ export function tokenIsValid(token: AccessToken | null): boolean {
 
 export function isConsentRequired(error: unknown): boolean {
     return error instanceof OAuthError && CONSENT_REQUIRED_CODES.has(error.code)
+}
+
+/** Shown when a signed-in session can't be silently restored and there's no API-key fallback. */
+export const REAUTH_MESSAGE = 'Your session expired — sign in again from Settings.'
+
+/**
+ * Resolve the credentials for a Data API call from current store state. If the user has signed in,
+ * silently refreshes the token (throwing REAUTH_MESSAGE when neither a token nor an API key is
+ * available); otherwise returns an anonymous Auth so the proxy falls back to the stored API key.
+ */
+export async function resolveAuth(): Promise<Auth> {
+    const { hasSignedIn, accessToken, apiKeyConfigured } = useStore.getState()
+    if (!hasSignedIn && !accessToken) return { token: null }
+    const token = await getValidToken()
+    if (!token && !apiKeyConfigured) throw new Error(REAUTH_MESSAGE)
+    return { token: token?.value ?? null }
 }

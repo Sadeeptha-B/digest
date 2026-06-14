@@ -69,6 +69,17 @@ interface StoreState {
     /** append a single standalone video into the reserved "Saved videos" list */
     addStandaloneVideo: (video: Video) => void
 
+    /**
+     * Reconcile a stored playlist against a fresh fetch from YouTube. Preserves the user's video
+     * order and local removals: retained videos keep their position, videos deleted upstream are
+     * dropped, and videos newly added upstream are appended. Also refreshes title/channel and
+     * stamps lastSyncedAt. (Video metadata is refreshed separately via upsertVideos.)
+     */
+    mergePlaylistContents: (
+        playlistId: string,
+        remote: { title: string; channelTitle: string; videoIds: string[] },
+    ) => void
+
     reorderPlaylists: (orderedIds: string[]) => void
     reorderVideos: (playlistId: string, orderedVideoIds: string[]) => void
     removeVideoFromPlaylist: (playlistId: string, videoId: string) => void
@@ -215,6 +226,7 @@ export const useStore = create<StoreState>()(
                             channelTitle: '',
                             videoIds: [video.id],
                             addedAt: Date.now(),
+                            lastSyncedAt: Date.now(),
                         }
                         return { videos, playlists: [saved, ...s.playlists] }
                     }
@@ -227,6 +239,28 @@ export const useStore = create<StoreState>()(
                                   : p,
                           )
                     return { videos, playlists }
+                }),
+
+            mergePlaylistContents: (playlistId, remote) =>
+                set((s) => {
+                    const existing = s.playlists.find((p) => p.id === playlistId)
+                    if (!existing) return s
+                    const remoteSet = new Set(remote.videoIds)
+                    const existingSet = new Set(existing.videoIds)
+                    // Keep the user's order, drop anything deleted upstream...
+                    const retained = existing.videoIds.filter((id) => remoteSet.has(id))
+                    // ...then append videos newly added upstream, in their YouTube order.
+                    const added = remote.videoIds.filter((id) => !existingSet.has(id))
+                    const merged: Playlist = {
+                        ...existing,
+                        title: remote.title,
+                        channelTitle: remote.channelTitle,
+                        videoIds: [...retained, ...added],
+                        lastSyncedAt: Date.now(),
+                    }
+                    return {
+                        playlists: s.playlists.map((p) => (p.id === playlistId ? merged : p)),
+                    }
                 }),
 
             reorderPlaylists: (orderedIds) =>
@@ -276,7 +310,7 @@ export const useStore = create<StoreState>()(
         }),
         {
             name: 'digest-store',
-            version: 5,
+            version: 6,
             // Persist everything except the short-lived access token (kept in memory only) and the
             // server-probed recallConfigured flag (always reconciled fresh on load).
             partialize: ({ accessToken: _omit, recallConfigured: _omitRecall, ...rest }) => rest,
@@ -284,7 +318,7 @@ export const useStore = create<StoreState>()(
             // v3 dropped the in-browser `apiKey` (now a server-side HttpOnly cookie) — delete the
             // stale secret from localStorage; the user re-enters it once to set the cookie.
             // v4 added settings.accentTheme; v5 added settings.pomodoroResetThresholdMin —
-            // backfill both on older state.
+            // backfill both on older state. v6 added playlist.lastSyncedAt — backfill from addedAt.
             migrate: (persisted) => {
                 if (persisted && typeof persisted === 'object') {
                     const data = persisted as Record<string, unknown>
@@ -297,6 +331,13 @@ export const useStore = create<StoreState>()(
                         settings.pomodoroResetThresholdMin = 5
                     }
                     data.settings = settings
+                    if (Array.isArray(data.playlists)) {
+                        for (const p of data.playlists as Array<Record<string, unknown>>) {
+                            if (typeof p.lastSyncedAt !== 'number') {
+                                p.lastSyncedAt = typeof p.addedAt === 'number' ? p.addedAt : Date.now()
+                            }
+                        }
+                    }
                 }
                 return persisted as StoreState
             },

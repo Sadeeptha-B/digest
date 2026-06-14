@@ -8,3 +8,15 @@ export function fmt(sec: number): string {
   const ss = String(s).padStart(2, '0')
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
 }
+
+/** Compact relative-time label for a past epoch-ms timestamp, e.g. "just now", "5m ago", "3d ago". */
+export function timeAgo(epochMs: number, now = Date.now()): string {
+  const sec = Math.max(0, Math.floor((now - epochMs) / 1000))
+  if (sec < 45) return 'just now'
+  const min = Math.round(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.round(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const days = Math.round(hr / 24)
+  return `${days}d ago`
+}

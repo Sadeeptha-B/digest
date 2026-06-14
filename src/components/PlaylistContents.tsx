@@ -1,8 +1,16 @@
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
-import { CloseIcon, PlayIcon, TrashIcon } from './Icons'
+import { isConsentRequired, REAUTH_MESSAGE, resolveAuth } from '../lib/oauth'
+import { syncPlaylist } from '../lib/playlistSync'
+import { YouTubeApiError } from '../lib/youtube'
+import { timeAgo } from '../lib/time'
+import { CloseIcon, PlayIcon, RefreshIcon, TrashIcon } from './Icons'
 import { DragHandle, SortableList, useSortableRow } from './Sortable'
 import { VideoThumbnail } from './VideoThumbnail'
+
+/** Opening a playlist older than this triggers a silent background sync. */
+const AUTOSYNC_STALE_MS = 24 * 60 * 60 * 1000 // 6 hours
 
 export function PlaylistContents({
     playlistId,
@@ -15,6 +23,40 @@ export function PlaylistContents({
     const progress = useStore((s) => s.progress)
     const reorderVideos = useStore((s) => s.reorderVideos)
     const navigate = useNavigate()
+
+    const [refreshing, setRefreshing] = useState(false)
+    const [refreshError, setRefreshError] = useState<string | null>(null)
+
+    const ytPlaylistId = playlist?.ytPlaylistId
+
+    async function handleRefresh({ silent = false } = {}) {
+        if (!playlist || !ytPlaylistId || refreshing) return
+        setRefreshing(true)
+        setRefreshError(null)
+        try {
+            const auth = await resolveAuth()
+            await syncPlaylist(playlist.id, ytPlaylistId, auth)
+        } catch (err) {
+            // Background auto-syncs fail quietly; the manual button is where errors surface.
+            if (silent) return
+            if (err instanceof Error && err.message === REAUTH_MESSAGE) setRefreshError(err.message)
+            else if (isConsentRequired(err)) setRefreshError(REAUTH_MESSAGE)
+            else if (err instanceof YouTubeApiError) setRefreshError(err.message)
+            else setRefreshError('Could not refresh from YouTube.')
+        } finally {
+            setRefreshing(false)
+        }
+    }
+
+    // Auto-sync once when a stale playlist is opened, so the list freshens without a manual click.
+    useEffect(() => {
+        if (!ytPlaylistId) return
+        const p = useStore.getState().playlists.find((pl) => pl.id === playlistId)
+        if (!p || Date.now() - p.lastSyncedAt < AUTOSYNC_STALE_MS) return
+        void handleRefresh({ silent: true })
+        // Fire only when the opened playlist changes, not on every sync-driven re-render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [playlistId, ytPlaylistId])
 
     if (!playlist) {
         return <p className="text-sm text-zinc-500">Playlist not found.</p>
@@ -32,8 +74,22 @@ export function PlaylistContents({
                     <p className="truncate text-xs text-zinc-500">
                         {playlist.channelTitle ? `${playlist.channelTitle} · ` : ''}
                         {watched}/{total} watched
+                        {ytPlaylistId && (
+                            <> · {refreshing ? 'syncing…' : `synced ${timeAgo(playlist.lastSyncedAt)}`}</>
+                        )}
                     </p>
                 </div>
+                {ytPlaylistId && (
+                    <button
+                        onClick={() => handleRefresh()}
+                        disabled={refreshing}
+                        className="rounded-lg p-2 text-zinc-400 hover:bg-ink-800 hover:text-white disabled:opacity-40"
+                        aria-label="Refresh from YouTube"
+                        title="Refresh from YouTube"
+                    >
+                        <RefreshIcon className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+                    </button>
+                )}
                 {first && (
                     <button
                         onClick={() => navigate(`/watch/${first}?list=${playlist.id}`)}
@@ -52,6 +108,8 @@ export function PlaylistContents({
                     </button>
                 )}
             </div>
+
+            {refreshError && <p className="mt-2 text-sm text-rose-400">{refreshError}</p>}
 
             <div className="mt-4 min-h-0 flex-1 overflow-y-auto scrollbar-slim">
                 <SortableList
