@@ -69,6 +69,14 @@ export const HelpIcon = ({ className = 'h-4 w-4' }: P) => (
   </svg>
 )
 
+export const FocusIcon = ({ className = 'h-4 w-4' }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="4.5" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+  </svg>
+)
+
 export const PauseIcon = ({ className = 'h-4 w-4' }: P) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
     <rect x="6" y="5" width="4" height="14" rx="1" />

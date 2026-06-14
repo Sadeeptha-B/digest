@@ -103,8 +103,13 @@ API key from the onboarding screen (the sign-in button will simply error if used
 ```bash
 npm run build     # type-checks and bundles to dist/
 npm run preview   # serve the production build locally (PWA active here)
+npm run lint      # ESLint (flat config) — Rules of Hooks, Fast Refresh, TS smells
 npm run icons     # regenerate app icons from scripts/generate-icons.mjs
 ```
+
+Linting is intentionally lightweight: `tsc -b` owns type correctness, while ESLint
+([`eslint.config.js`](eslint.config.js)) catches what the compiler doesn't and scopes globals
+per runtime — browser for [`src/`](src), Workers for [`functions/`](functions), Node for tooling.
 
 ## Install as an app (PWA)
 

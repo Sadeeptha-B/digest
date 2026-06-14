@@ -39,6 +39,9 @@ interface StoreState {
         pomodoroResetThresholdMin: number
         accentTheme: AccentTheme
         userName: string
+        /** Master switch for the watch-page focus scaffolding (Pomodoro timeline + focus widgets).
+         *  Off gives a bare player. Defaults on — focus tooling is Digest's reason for existing. */
+        focusMode: boolean
     }
     /** Pomodoro focus-session event logs keyed by videoId */
     pomodoroSessions: Record<string, PomodoroEvent[]>
@@ -60,6 +63,7 @@ interface StoreState {
     setPomodoroResetThreshold: (min: number) => void
     setAccentTheme: (theme: AccentTheme) => void
     setUserName: (name: string) => void
+    setFocusMode: (value: boolean) => void
     logPomodoroEvent: (videoId: string, event: PomodoroEvent) => void
     clearPomodoroSession: (videoId: string) => void
 
@@ -114,6 +118,7 @@ const initialData = {
         pomodoroResetThresholdMin: 5,
         accentTheme: DEFAULT_ACCENT_THEME,
         userName: '',
+        focusMode: true,
     },
     pomodoroSessions: {} as Record<string, PomodoroEvent[]>,
     focusNotes: [] as FocusNote[],
@@ -167,6 +172,7 @@ export const useStore = create<StoreState>()(
                 set((s) => ({ settings: { ...s.settings, pomodoroResetThresholdMin: min } })),
             setAccentTheme: (theme) => set((s) => ({ settings: { ...s.settings, accentTheme: theme } })),
             setUserName: (name) => set((s) => ({ settings: { ...s.settings, userName: name } })),
+            setFocusMode: (value) => set((s) => ({ settings: { ...s.settings, focusMode: value } })),
             logPomodoroEvent: (videoId, event) =>
                 set((s) => ({
                     pomodoroSessions: {
@@ -361,7 +367,7 @@ export const useStore = create<StoreState>()(
         }),
         {
             name: 'digest-store',
-            version: 8,
+            version: 9,
             // Persist everything except the short-lived access token (kept in memory only) and the
             // server-probed recallConfigured flag (always reconciled fresh on load).
             partialize: ({ accessToken: _omit, recallConfigured: _omitRecall, ...rest }) => rest,
@@ -372,6 +378,8 @@ export const useStore = create<StoreState>()(
             // backfill both on older state. v6 added playlist.lastSyncedAt — backfill from addedAt.
             // v7 added playlist.removedVideoIds (sync tombstones) — backfill to an empty array.
             // v8 added playlist.restoredVideoIds so explicit restores survive later syncs.
+            // v9 added settings.focusMode — backfill to true (focus scaffolding stays on for
+            // existing users). See ADR 0010.
             migrate: (persisted) => {
                 if (persisted && typeof persisted === 'object') {
                     const data = persisted as Record<string, unknown>
@@ -383,6 +391,7 @@ export const useStore = create<StoreState>()(
                     if (typeof settings.pomodoroResetThresholdMin !== 'number') {
                         settings.pomodoroResetThresholdMin = 5
                     }
+                    if (typeof settings.focusMode !== 'boolean') settings.focusMode = true
                     data.settings = settings
                     if (Array.isArray(data.playlists)) {
                         for (const p of data.playlists as Array<Record<string, unknown>>) {

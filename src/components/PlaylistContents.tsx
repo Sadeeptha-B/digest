@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { isConsentRequired, REAUTH_MESSAGE, resolveAuth } from '../lib/oauth'
 import { refreshRestoredVideo, syncPlaylist } from '../lib/playlistSync'
 import { YouTubeApiError } from '../lib/youtube'
 import { timeAgo } from '../lib/time'
-import { CloseIcon, PlayIcon, RefreshIcon, RestoreIcon, TrashIcon } from './Icons'
-import { DragHandle, SortableList, useSortableRow } from './Sortable'
+import { CloseIcon, PlayIcon, RefreshIcon, RestoreIcon } from './Icons'
+import { PlaylistVideoList } from './PlaylistVideoList'
 import { VideoThumbnail } from './VideoThumbnail'
 
 /** Opening a playlist older than this triggers a silent background sync. */
@@ -21,7 +21,6 @@ export function PlaylistContents({
 }) {
     const playlist = useStore((s) => s.playlists.find((p) => p.id === playlistId))
     const progress = useStore((s) => s.progress)
-    const reorderVideos = useStore((s) => s.reorderVideos)
     const restoreVideoToPlaylist = useStore((s) => s.restoreVideoToPlaylist)
     const navigate = useNavigate()
 
@@ -121,16 +120,7 @@ export function PlaylistContents({
             {refreshError && <p className="mt-2 text-sm text-rose-400">{refreshError}</p>}
 
             <div className="mt-4 min-h-0 flex-1 overflow-y-auto scrollbar-slim">
-                <SortableList
-                    ids={playlist.videoIds}
-                    onReorder={(ids) => reorderVideos(playlist.id, ids)}
-                >
-                    <ul className="space-y-1.5">
-                        {playlist.videoIds.map((videoId, i) => (
-                            <VideoRow key={videoId} videoId={videoId} index={i} playlistId={playlist.id} />
-                        ))}
-                    </ul>
-                </SortableList>
+                <PlaylistVideoList playlistId={playlist.id} />
             </div>
 
             {ytPlaylistId && playlist.removedVideoIds.length > 0 && (
@@ -179,63 +169,6 @@ function RemovedVideoRow({ videoId, onRestore }: { videoId: string; onRestore: (
                 aria-label="Restore video"
             >
                 <RestoreIcon className="h-4 w-4" /> Restore
-            </button>
-        </li>
-    )
-}
-
-function VideoRow({
-    videoId,
-    index,
-    playlistId,
-}: {
-    videoId: string
-    index: number
-    playlistId: string
-}) {
-    const video = useStore((s) => s.videos[videoId])
-    const watched = useStore((s) => s.progress[videoId]?.watched ?? false)
-    const removeVideoFromPlaylist = useStore((s) => s.removeVideoFromPlaylist)
-    const { setNodeRef, style, isDragging, handleProps } = useSortableRow(videoId)
-
-    return (
-        <li
-            ref={setNodeRef}
-            style={style}
-            className={`flex items-center gap-3 rounded-lg border border-transparent bg-ink-850 p-2 hover:border-ink-700 ${isDragging ? 'opacity-60' : ''
-                }`}
-        >
-            <DragHandle iconClassName="h-4 w-4" {...handleProps} />
-
-            <Link
-                to={`/watch/${videoId}?list=${playlistId}`}
-                className="flex min-w-0 flex-1 items-center gap-3"
-            >
-                <VideoThumbnail
-                    thumbnailUrl={video?.thumbnailUrl}
-                    watched={watched}
-                    className="relative aspect-video w-28 shrink-0 overflow-hidden rounded bg-ink-800"
-                    checkClassName="h-6 w-6"
-                />
-                <div className="min-w-0">
-                    <p
-                        className={`line-clamp-2 text-sm ${video?.isUnavailable ? 'italic text-zinc-500' : 'text-zinc-100'
-                            }`}
-                    >
-                        {index + 1}. {video?.title ?? 'Loading…'}
-                    </p>
-                    {video?.channelTitle && (
-                        <p className="truncate text-xs text-zinc-500">{video.channelTitle}</p>
-                    )}
-                </div>
-            </Link>
-
-            <button
-                onClick={() => removeVideoFromPlaylist(playlistId, videoId)}
-                className="rounded-lg p-2 text-zinc-500 hover:bg-ink-800 hover:text-rose-400"
-                aria-label="Remove video"
-            >
-                <TrashIcon className="h-4 w-4" />
             </button>
         </li>
     )

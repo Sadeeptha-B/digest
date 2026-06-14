@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { BackIcon } from '../components/Icons'
 import { usePageTitle } from '../lib/pageTitle'
 
@@ -10,15 +10,16 @@ import { usePageTitle } from '../lib/pageTitle'
  */
 export function Guide() {
   usePageTitle('User guide')
+  const navigate = useNavigate()
 
   return (
     <div className="mx-auto w-full max-w-2xl pb-16">
-      <Link
-        to="/"
+      <button
+        onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
         className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white"
       >
-        <BackIcon className="h-4 w-4" /> Back to library
-      </Link>
+        <BackIcon className="h-4 w-4" /> Back
+      </button>
 
       <h1 className="mt-6 text-2xl font-semibold text-white">How Digest works</h1>
       <p className="mt-2 text-zinc-400">

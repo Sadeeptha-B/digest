@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { signOut, tokenIsValid } from '../lib/oauth'
 import { clearApiKey } from '../lib/apiKey'
@@ -6,6 +6,40 @@ import { clearRecallKey } from '../lib/recallKey'
 import { useGoogleSignIn } from '../hooks/useGoogleSignIn'
 import { useApiKey } from '../hooks/useApiKey'
 import { useRecallKey } from '../hooks/useRecallKey'
+import { CloseIcon, HelpIcon } from './Icons'
+
+function InfoTip({ text }: { text: string }) {
+    const [open, setOpen] = useState(false)
+    const tooltipId = useId()
+
+    return (
+        <span className="relative inline-flex items-center">
+            <button
+                type="button"
+                onMouseEnter={() => setOpen(true)}
+                onMouseLeave={() => setOpen(false)}
+                onFocus={() => setOpen(true)}
+                onBlur={() => setOpen(false)}
+                onClick={() => setOpen((value) => !value)}
+                className="ml-1.5 rounded-full p-0.5 text-zinc-600 hover:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                aria-label="More info"
+                aria-describedby={open ? tooltipId : undefined}
+                aria-expanded={open}
+            >
+                <HelpIcon className="h-3.5 w-3.5" />
+            </button>
+            {open && (
+                <span
+                    id={tooltipId}
+                    role="tooltip"
+                    className="absolute left-0 top-full z-20 mt-1 w-52 rounded-lg border border-ink-700 bg-ink-900 p-2.5 text-xs leading-relaxed text-zinc-400 shadow-xl"
+                >
+                    {text}
+                </span>
+            )}
+        </span>
+    )
+}
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
     const accessToken = useStore((s) => s.accessToken)
@@ -39,12 +73,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     async function handleClearData() {
         setClearError(null)
         setClearBusy(true)
-        if (signedIn) signOut() // revoke the token before wiping everything
-        const results = await Promise.allSettled([
-            clearApiKey(), // clear the server-side YouTube key cookie too
-            clearRecallKey(), // and the Recall key cookie
-        ])
-        if (results.some((result) => result.status === 'rejected')) {
+        if (signedIn) signOut()
+        const results = await Promise.allSettled([clearApiKey(), clearRecallKey()])
+        if (results.some((r) => r.status === 'rejected')) {
             setClearError('Could not clear all server-side credentials. Try again while online.')
             setClearBusy(false)
             return
@@ -54,34 +85,44 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     }
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:items-center"
-            onClick={onClose}
-        >
+        <>
             <div
-                className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto scrollbar-slim rounded-xl border border-ink-700 bg-ink-850 p-5"
-                onClick={(e) => e.stopPropagation()}
+                className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:items-center"
+                onClick={onClose}
             >
-                <h2 className="text-base font-medium text-white">Settings</h2>
+                <div
+                    className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto scrollbar-slim rounded-xl border border-ink-700 bg-ink-850 p-5"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-base font-medium text-white">Settings</h2>
+                        <button
+                            onClick={onClose}
+                            aria-label="Close"
+                            className="rounded-lg p-1 text-zinc-500 hover:bg-ink-800 hover:text-zinc-300"
+                        >
+                            <CloseIcon className="h-4 w-4" />
+                        </button>
+                    </div>
 
-                {/* --- Your name (used for the library greeting) --- */}
-                <label className="mt-4 block text-sm text-zinc-400">Your name</label>
-                <input
-                    type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value.slice(0, 40))}
-                    placeholder="What should we call you?"
-                    className="mt-2 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
-                />
-                <p className="mt-1.5 text-xs text-zinc-500">
-                    Used for the greeting on your library page. Leave blank to keep it generic.
-                </p>
+                    {/* --- Your name --- */}
+                    <label className="mt-4 flex items-center text-sm text-zinc-400">
+                        Your name
+                        <InfoTip text="Used for the greeting on your library page. Leave blank to keep it generic." />
+                    </label>
+                    <input
+                        type="text"
+                        value={userName}
+                        onChange={(e) => setUserName(e.target.value.slice(0, 40))}
+                        placeholder="What should we call you?"
+                        className="mt-2 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
+                    />
 
-                <hr className="my-4 border-ink-700" />
+                    <hr className="my-4 border-ink-700" />
 
-                {/* --- Google account --- */}
-                <>
-                    <label className="mt-4 block text-sm text-zinc-400">Google account</label>
+                    {/* --- Google account --- */}
+                    <label className="block text-sm text-zinc-400">Google account</label>
                     <div className="mt-2 flex items-center gap-2">
                         {signedIn ? (
                             <>
@@ -107,217 +148,225 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     </div>
                     <p className="mt-1.5 text-xs text-zinc-500">
                         Unlocks private playlists and transcripts. No API key required when signed in.
-                        {!signedIn && ' Sign-in is limited to pre-approved Google accounts (app in “Testing” mode).'}
+                        {!signedIn && ' Sign-in is limited to pre-approved Google accounts (app in "Testing" mode).'}
                     </p>
                     {authError && <p className="mt-1 text-sm text-rose-400">{authError}</p>}
 
                     <hr className="my-4 border-ink-700" />
-                </>
 
-                {/* --- API key (only relevant when not signed in) --- */}
-                {signedIn ? (
-                    <p className="text-xs text-zinc-500">
-                        A YouTube API key isn't needed while signed in.{' '}
-                        <button onClick={() => setShowKey((v) => !v)} className="text-accent-400 hover:underline">
-                            {showKey ? 'Hide' : 'Set one anyway'}
-                        </button>
-                    </p>
-                ) : (
-                    <label className="block text-sm text-zinc-400">YouTube API key</label>
-                )}
-                {(!signedIn || showKey) && (
-                    <>
-                        {keyConfigured && (
-                            <div className="mt-2 flex items-center gap-2">
-                                <span className="flex items-center gap-1.5 text-sm text-accent-400">
-                                    <span className="h-2 w-2 rounded-full bg-accent-400" /> Key configured
-                                </span>
-                                <button
-                                    onClick={() => void removeKey()}
-                                    disabled={keyBusy}
-                                    className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800 disabled:opacity-40"
-                                >
-                                    Remove
-                                </button>
-                            </div>
-                        )}
-                        <form
-                            className="mt-2 flex gap-2"
-                            onSubmit={async (e) => {
-                                e.preventDefault()
-                                if (key.trim() && (await saveKey(key))) setKey('')
-                            }}
-                        >
-                            <input
-                                type="password"
-                                value={key}
-                                onChange={(e) => setKey(e.target.value)}
-                                placeholder={keyConfigured ? 'Replace key…' : 'AIza…'}
-                                disabled={keyBusy}
-                                className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500 disabled:opacity-50"
-                            />
-                            <button
-                                type="submit"
-                                disabled={keyBusy || !key.trim()}
-                                className="rounded-lg bg-accent-600 px-3 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
-                            >
-                                {keyBusy ? 'Checking…' : 'Save'}
+                    {/* --- YouTube API key --- */}
+                    {signedIn ? (
+                        <p className="text-xs text-zinc-500">
+                            A YouTube API key isn't needed while signed in.{' '}
+                            <button onClick={() => setShowKey((v) => !v)} className="text-accent-400 hover:underline">
+                                {showKey ? 'Hide' : 'Set one anyway'}
                             </button>
-                        </form>
-                        <p className="mt-1.5 text-xs text-zinc-500">
-                            For browsing public content without signing in. Stored server-side; restrict it to
-                            the YouTube Data API in Google Cloud.
                         </p>
-                        {keyError && <p className="mt-1 text-sm text-rose-400">{keyError}</p>}
-                    </>
-                )}
+                    ) : (
+                        <label className="block text-sm text-zinc-400">YouTube API key</label>
+                    )}
+                    {(!signedIn || showKey) && (
+                        <>
+                            {keyConfigured && (
+                                <div className="mt-2 flex items-center gap-2">
+                                    <span className="flex items-center gap-1.5 text-sm text-accent-400">
+                                        <span className="h-2 w-2 rounded-full bg-accent-400" /> Key configured
+                                    </span>
+                                    <button
+                                        onClick={() => void removeKey()}
+                                        disabled={keyBusy}
+                                        className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800 disabled:opacity-40"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            )}
+                            <form
+                                className="mt-2 flex gap-2"
+                                onSubmit={async (e) => {
+                                    e.preventDefault()
+                                    if (key.trim() && (await saveKey(key))) setKey('')
+                                }}
+                            >
+                                <input
+                                    type="password"
+                                    value={key}
+                                    onChange={(e) => setKey(e.target.value)}
+                                    placeholder={keyConfigured ? 'Replace key…' : 'AIza…'}
+                                    disabled={keyBusy}
+                                    className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500 disabled:opacity-50"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={keyBusy || !key.trim()}
+                                    className="rounded-lg bg-accent-600 px-3 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
+                                >
+                                    {keyBusy ? 'Checking…' : 'Save'}
+                                </button>
+                            </form>
+                            <p className="mt-1.5 text-xs text-zinc-500">
+                                For browsing public content without signing in. Stored server-side; restrict it to
+                                the YouTube Data API in Google Cloud.
+                            </p>
+                            {keyError && <p className="mt-1 text-sm text-rose-400">{keyError}</p>}
+                        </>
+                    )}
 
-                <hr className="my-4 border-ink-700" />
+                    <hr className="my-4 border-ink-700" />
 
-                {/* --- Recall API key (bring-your-own getrecall.ai key for AI summaries) --- */}
-                <label className="block text-sm text-zinc-400">Recall API key</label>
-                {recallConfigured && (
-                    <div className="mt-2 flex items-center gap-2">
-                        <span className="flex items-center gap-1.5 text-sm text-accent-400">
-                            <span className="h-2 w-2 rounded-full bg-accent-400" /> Key configured
-                        </span>
-                        <button
-                            onClick={() => void removeRecall()}
+                    {/* --- Recall API key --- */}
+                    <label className="block text-sm text-zinc-400">Recall API key</label>
+                    {recallConfigured && (
+                        <div className="mt-2 flex items-center gap-2">
+                            <span className="flex items-center gap-1.5 text-sm text-accent-400">
+                                <span className="h-2 w-2 rounded-full bg-accent-400" /> Key configured
+                            </span>
+                            <button
+                                onClick={() => void removeRecall()}
+                                disabled={recallBusy}
+                                className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800 disabled:opacity-40"
+                            >
+                                Remove
+                            </button>
+                        </div>
+                    )}
+                    <form
+                        className="mt-2 flex gap-2"
+                        onSubmit={async (e) => {
+                            e.preventDefault()
+                            if (recallKey.trim() && (await saveRecall(recallKey))) setRecallKey('')
+                        }}
+                    >
+                        <input
+                            type="password"
+                            value={recallKey}
+                            onChange={(e) => setRecallKey(e.target.value)}
+                            placeholder={recallConfigured ? 'Replace key…' : 'sk_…'}
                             disabled={recallBusy}
-                            className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800 disabled:opacity-40"
+                            className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500 disabled:opacity-50"
+                        />
+                        <button
+                            type="submit"
+                            disabled={recallBusy || !recallKey.trim()}
+                            className="rounded-lg bg-accent-600 px-3 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
                         >
-                            Remove
+                            {recallBusy ? 'Checking…' : 'Save'}
                         </button>
-                    </div>
-                )}
-                <form
-                    className="mt-2 flex gap-2"
-                    onSubmit={async (e) => {
-                        e.preventDefault()
-                        if (recallKey.trim() && (await saveRecall(recallKey))) setRecallKey('')
-                    }}
-                >
-                    <input
-                        type="password"
-                        value={recallKey}
-                        onChange={(e) => setRecallKey(e.target.value)}
-                        placeholder={recallConfigured ? 'Replace key…' : 'sk_…'}
-                        disabled={recallBusy}
-                        className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500 disabled:opacity-50"
-                    />
-                    <button
-                        type="submit"
-                        disabled={recallBusy || !recallKey.trim()}
-                        className="rounded-lg bg-accent-600 px-3 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
-                    >
-                        {recallBusy ? 'Checking…' : 'Save'}
-                    </button>
-                </form>
-                <p className="mt-1.5 text-xs text-zinc-500">
-                    Shows AI summaries from your{' '}
-                    <a
-                        href="https://www.recall.it"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-accent-400 hover:underline"
-                    >
-                        Recall
-                    </a>{' '}
-                    knowledge base on the watch page. This key grants read access to your entire Recall
-                    library, so it's stored server-side and never exposed to the browser.
-                </p>
-                {recallError && <p className="mt-1 text-sm text-rose-400">{recallError}</p>}
+                    </form>
+                    <p className="mt-1.5 text-xs text-zinc-500">
+                        Shows AI summaries from your{' '}
+                        <a
+                            href="https://www.recall.it"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-accent-400 hover:underline"
+                        >
+                            Recall
+                        </a>{' '}
+                        knowledge base on the watch page. This key grants read access to your entire Recall
+                        library, so it's stored server-side and never exposed to the browser.
+                    </p>
+                    {recallError && <p className="mt-1 text-sm text-rose-400">{recallError}</p>}
 
-                <hr className="my-4 border-ink-700" />
+                    <hr className="my-4 border-ink-700" />
 
-                {/* --- Pomodoro focus timer --- */}
-                <label className="block text-sm text-zinc-400">Pomodoro length</label>
-                <div className="mt-2 flex items-center gap-2">
-                    <input
-                        type="number"
-                        min={5}
-                        max={60}
-                        value={pomodoroLengthMin}
-                        onChange={(e) => {
-                            const n = Math.round(Number(e.target.value))
-                            if (Number.isFinite(n)) setPomodoroLength(Math.min(60, Math.max(5, n)))
-                        }}
-                        className="w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
-                    />
-                    <span className="text-sm text-zinc-400">minutes</span>
-                </div>
-                <p className="mt-1.5 text-xs text-zinc-500">
-                    Length of each focus block. For videos over 15 minutes, a timeline of blocks (with
-                    fixed, skippable 5-minute breaks) appears below the video.
-                </p>
-
-                {/* --- Pomodoro reset threshold --- */}
-                <label className="mt-4 block text-sm text-zinc-400">Reset threshold</label>
-                <div className="mt-2 flex items-center gap-2">
-                    <input
-                        type="number"
-                        min={0}
-                        max={pomodoroLengthMin}
-                        value={resetThresholdMin}
-                        onChange={(e) => {
-                            const n = Math.round(Number(e.target.value))
-                            if (Number.isFinite(n)) setResetThreshold(Math.min(pomodoroLengthMin, Math.max(0, n)))
-                        }}
-                        className="w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
-                    />
-                    <span className="text-sm text-zinc-400">minutes</span>
-                </div>
-                <p className="mt-1.5 text-xs text-zinc-500">
-                    Pause within the first {resetThresholdMin} minute{resetThresholdMin === 1 ? '' : 's'} of
-                    a block and it resets (resume starts a fresh block). Pause later and the timer just
-                    holds — your progress is kept and the same block resumes. Set to 0 to never reset.
-                </p>
-
-                <hr className="my-4 border-ink-700" />
-
-                {/* --- Clear data --- */}
-                <label className="block text-sm text-zinc-400">Clear data</label>
-                <p className="mt-1 text-xs text-zinc-500">
-                    Removes all lists, videos, watch progress, cached transcripts, and credentials from this
-                    browser, resetting the app to a fresh install.
-                </p>
-                {clearError && <p className="mt-1 text-sm text-rose-400">{clearError}</p>}
-                {confirmClear ? (
+                    {/* --- Pomodoro focus timer --- */}
+                    <label className="flex items-center text-sm text-zinc-400">
+                        Pomodoro length
+                        <InfoTip text="Length of each focus block. For videos over 15 minutes, a timeline of blocks with skippable 5-minute breaks appears below the video." />
+                    </label>
                     <div className="mt-2 flex items-center gap-2">
-                        <span className="text-sm text-rose-400">This can't be undone.</span>
-                        <button
-                            onClick={() => void handleClearData()}
-                            disabled={clearBusy}
-                            className="ml-auto rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-500"
-                        >
-                            {clearBusy ? 'Clearing…' : 'Clear everything'}
-                        </button>
-                        <button
-                            onClick={() => setConfirmClear(false)}
-                            disabled={clearBusy}
-                            className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800 disabled:opacity-40"
-                        >
-                            Cancel
-                        </button>
+                        <input
+                            type="number"
+                            min={5}
+                            max={60}
+                            value={pomodoroLengthMin}
+                            onChange={(e) => {
+                                const n = Math.round(Number(e.target.value))
+                                if (Number.isFinite(n)) setPomodoroLength(Math.min(60, Math.max(5, n)))
+                            }}
+                            className="w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
+                        />
+                        <span className="text-sm text-zinc-400">minutes</span>
                     </div>
-                ) : (
+
+                    {/* --- Pomodoro reset threshold --- */}
+                    <label className="mt-4 flex items-center text-sm text-zinc-400">
+                        Reset threshold
+                        <InfoTip text="Pause in the first N minutes of a block and it resets — resume starts fresh. Pause later and the timer holds, keeping your progress. Set to 0 to never reset." />
+                    </label>
+                    <div className="mt-2 flex items-center gap-2">
+                        <input
+                            type="number"
+                            min={0}
+                            max={pomodoroLengthMin}
+                            value={resetThresholdMin}
+                            onChange={(e) => {
+                                const n = Math.round(Number(e.target.value))
+                                if (Number.isFinite(n)) setResetThreshold(Math.min(pomodoroLengthMin, Math.max(0, n)))
+                            }}
+                            className="w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
+                        />
+                        <span className="text-sm text-zinc-400">minutes</span>
+                    </div>
+
+                    <hr className="my-4 border-ink-700" />
+
+                    {/* --- Clear data --- */}
+                    <label className="block text-sm text-zinc-400">Clear data</label>
                     <button
                         onClick={() => setConfirmClear(true)}
                         className="mt-2 rounded-lg border border-rose-900/60 px-3 py-1.5 text-sm text-rose-400 hover:bg-rose-950/40"
                     >
                         Clear all data
                     </button>
-                )}
 
-                <div className="mt-5 flex justify-end">
-                    <button
-                        onClick={onClose}
-                        className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500"
-                    >
-                        Done
-                    </button>
+                    <div className="mt-5 flex justify-end">
+                        <button
+                            onClick={onClose}
+                            className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500"
+                        >
+                            Done
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            {/* --- Nested clear-data confirm --- */}
+            {confirmClear && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4"
+                    onClick={() => !clearBusy && setConfirmClear(false)}
+                >
+                    <div
+                        className="w-full max-w-sm rounded-xl border border-rose-900/60 bg-ink-850 p-5 shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-base font-medium text-white">Clear all data?</h3>
+                        <p className="mt-2 text-sm text-zinc-400">
+                            Removes all lists, videos, watch progress, cached transcripts, and credentials from
+                            this browser. This can't be undone.
+                        </p>
+                        {clearError && <p className="mt-2 text-sm text-rose-400">{clearError}</p>}
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button
+                                onClick={() => setConfirmClear(false)}
+                                disabled={clearBusy}
+                                className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800 disabled:opacity-40"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => void handleClearData()}
+                                disabled={clearBusy}
+                                className="rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-40"
+                            >
+                                {clearBusy ? 'Clearing…' : 'Clear everything'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     )
 }

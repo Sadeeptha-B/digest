@@ -3,15 +3,16 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import YouTube, { type YouTubeEvent, type YouTubePlayer } from 'react-youtube'
 import { useStore } from '../store/useStore'
 import { TranscriptPanel } from '../components/TranscriptPanel'
+import { UpNextPanel } from '../components/UpNextPanel'
 import { SummaryPanel } from '../components/SummaryPanel'
 import { SessionStatsPanel } from '../components/SessionStatsPanel'
 import { FocusPanel } from '../components/focus/FocusPanel'
 import { PomodoroTimeline } from '../components/PomodoroTimeline'
 import { usePomodoro } from '../hooks/usePomodoro'
 import { usePageTitle } from '../lib/pageTitle'
-import { BackIcon } from '../components/Icons'
+import { BackIcon, CheckIcon, FocusIcon } from '../components/Icons'
 
-type Tab = 'transcript' | 'summary' | 'stats'
+type Tab = 'transcript' | 'summary' | 'queue' | 'stats'
 
 // Videos longer than this (seconds) get a Pomodoro focus timeline.
 const POMODORO_MIN_DURATION = 15 * 60
@@ -33,12 +34,19 @@ export function Watch() {
     const setPosition = useStore((s) => s.setPosition)
     const getNextVideoId = useStore((s) => s.getNextVideoId)
     const recallConfigured = useStore((s) => s.recallConfigured)
+    const watched = useStore((s) => s.progress[videoId]?.watched ?? false)
+    const focusMode = useStore((s) => s.settings.focusMode)
+    const setFocusMode = useStore((s) => s.setFocusMode)
     const pomodoroLengthMin = useStore((s) => s.settings.pomodoroLengthMin)
     const pomodoroResetThresholdMin = useStore((s) => s.settings.pomodoroResetThresholdMin ?? 5)
 
+    // The "Up next" tab only makes sense inside a playlist with something to queue.
+    const showQueue = Boolean(playlist && playlist.videoIds.length > 1)
+
     useEffect(() => {
         if (!recallConfigured && tab === 'summary') setTab('transcript')
-    }, [recallConfigured, tab])
+        if (!showQueue && tab === 'queue') setTab('transcript')
+    }, [recallConfigured, showQueue, tab])
 
     // Surface the video title + channel in the shared page header (centered).
     usePageTitle(video?.title ?? null, video?.channelTitle || undefined)
@@ -90,7 +98,7 @@ export function Watch() {
         durationSec,
         pomodoroLengthSec: pomodoroLengthMin * 60,
         resetThresholdSec: pomodoroResetThresholdMin * 60,
-        enabled: pomodoroEnabled,
+        enabled: focusMode && pomodoroEnabled,
         onSessionEnd: finishVideo,
     })
     const { handlePlayerState, handleEnded } = pomodoro
@@ -158,9 +166,20 @@ export function Watch() {
                     >
                         <BackIcon className="h-5 w-5" />
                     </Link>
-                    <span className="truncate text-sm text-zinc-400">
+                    <span className="min-w-0 flex-1 truncate text-sm text-zinc-400">
                         {playlist ? playlist.title : 'Saved videos'}
                     </span>
+                    <button
+                        onClick={() => setFocusMode(!focusMode)}
+                        className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium ${focusMode
+                                ? 'text-accent-400 hover:bg-ink-800'
+                                : 'text-zinc-500 hover:bg-ink-800 hover:text-zinc-300'
+                            }`}
+                        aria-pressed={focusMode}
+                        title={focusMode ? 'Focus mode on — click for a bare player' : 'Focus mode off'}
+                    >
+                        <FocusIcon className="h-4 w-4" /> Focus {focusMode ? 'on' : 'off'}
+                    </button>
                 </div>
 
                 <div className="flex min-h-0 flex-1 items-center justify-center lg:min-h-[18rem]">
@@ -189,7 +208,7 @@ export function Watch() {
                     </div>
                 </div>
 
-                {pomodoroEnabled && (
+                {focusMode && pomodoroEnabled && (
                     <PomodoroTimeline
                         view={pomodoro.view}
                         onPause={pomodoro.pause}
@@ -198,14 +217,19 @@ export function Watch() {
                     />
                 )}
 
-                <FocusPanel />
+                {focusMode && <FocusPanel />}
 
                 <div className="mt-3 flex shrink-0 justify-end gap-2">
                     <button
-                        onClick={() => setWatched(videoId, true)}
-                        className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
+                        onClick={() => setWatched(videoId, !watched)}
+                        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${watched
+                                ? 'border-accent-600/40 bg-accent-600/10 text-accent-400 hover:bg-accent-600/20'
+                                : 'border-ink-700 text-zinc-300 hover:bg-ink-800'
+                            }`}
+                        aria-pressed={watched}
                     >
-                        Mark watched
+                        {watched && <CheckIcon className="h-4 w-4" />}
+                        {watched ? 'Watched' : 'Mark watched'}
                     </button>
                     {hasNext && (
                         <button
@@ -220,6 +244,11 @@ export function Watch() {
 
             <aside className="flex flex-col rounded-xl border border-ink-700 bg-ink-900/40 p-3 lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
                 <div className="mb-2 flex gap-1 border-b border-ink-800">
+                    {showQueue && (
+                        <TabButton active={tab === 'queue'} onClick={() => setTab('queue')}>
+                            Up next
+                        </TabButton>
+                    )}
                     <TabButton active={tab === 'transcript'} onClick={() => setTab('transcript')}>
                         Transcript
                     </TabButton>
@@ -238,6 +267,8 @@ export function Watch() {
                         <SessionStatsPanel video={video} />
                     ) : tab === 'summary' ? (
                         <SummaryPanel video={video} playerRef={playerRef} />
+                    ) : tab === 'queue' && showQueue ? (
+                        <UpNextPanel playlistId={listId} currentVideoId={videoId} />
                     ) : (
                         <TranscriptPanel video={video} playerRef={playerRef} />
                     )}
@@ -260,8 +291,8 @@ function TabButton({
         <button
             onClick={onClick}
             className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium ${active
-                    ? 'border-accent-500 text-white'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                ? 'border-accent-500 text-white'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
                 }`}
         >
             {children}
