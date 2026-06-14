@@ -1,6 +1,10 @@
 # Hosting & Deployment — Options and Decision Guide
 
-_Last updated: 2026-06-08_
+> Settled choices on this axis are recorded as ADRs — host on Cloudflare Pages
+> ([ADR 0001](../decisions/0001-cloudflare-pages-over-github-pages.md)) and the serverless broker
+> ([ADR 0002](../decisions/0002-serverless-broker-secrets-in-httponly-cookies.md)). This doc is the
+> **forward-looking** options guide; as items below ship, their rationale should migrate to an ADR
+> and the "future" framing here should shrink, not accumulate "(done)" banners.
 
 > **Status (2026-06-08):** Roadmap step 1 is **done** — the app moved off shared GitHub Pages to
 > **Cloudflare Pages** (isolated origin + real CSP header). A **serverless BFF layer** (step 4) is

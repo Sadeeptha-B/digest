@@ -1,10 +1,14 @@
 # Transcripts & Summaries — Options and Decision Guide
 
-_Last updated: 2026-06-07_
-
 This document captures **every option** we have evaluated for adding transcripts (and AI
 summaries) to **Digest**, with costs, implementation details, trade-offs, and a decision
 guide. It is meant to be read once and used to choose a direction.
+
+> Already-settled pieces are recorded as ADRs: removing the official `captions.download` path
+> ([ADR 0008](../decisions/0008-remove-official-captions-download.md)) and serving getrecall.ai
+> summaries through the same-origin proxy ([ADR 0007](../decisions/0007-recall-summaries-via-same-origin-proxy.md)).
+> The remaining options below — chiefly the home-server transcript path — are still **open roadmap**,
+> not decisions; record an ADR when one is chosen.
 
 > **Where the backend runs** (home server vs. non-home, static-host choice, exposure via
 > Tailscale/Cloudflare Tunnel, costs & maintenance) is covered in its own doc:

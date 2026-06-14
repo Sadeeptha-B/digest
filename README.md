@@ -181,6 +181,19 @@ Then redeploy (Deployments → Retry/Redeploy) so the Functions pick them up. Th
 - **Custom domain (optional):** add it under the project's **Custom domains** tab, then add
   `https://yourdomain.com/auth/callback` to the OAuth client's redirect URIs.
 
+## Documentation
+
+This README is the operator-facing quickstart. The rest of the docs are split by **lifecycle**:
+
+- **[docs/architecture.md](docs/architecture.md)** — reference: how the system works *now* (the
+  SPA, the Functions broker, the security model), one end-to-end read.
+- **[docs/decisions/](docs/decisions/README.md)** — append-only decision records (ADRs): *why* a
+  given tradeoff was made. Settled, never edited after the fact.
+- **[docs/roadmap/](docs/roadmap)** — forward-looking options ([hosting](docs/roadmap/hosting.md),
+  [transcripts](docs/roadmap/transcripts.md)); shrinks as items ship into ADRs.
+
+See [CLAUDE.md](CLAUDE.md) for the discipline that keeps these from drifting into each other.
+
 ## Scope / not included
 
 - A backend proxy / home server for transcripts of non-owned or auto-captioned videos

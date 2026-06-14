@@ -1,7 +1,5 @@
 # How Digest works — dev, cloud, and the security model
 
-_Last updated: 2026-06-08_
-
 > A holistic walkthrough of the whole system: the frontend SPA, the Cloudflare Pages
 > Functions backend, how Google sign-in and the YouTube API key actually flow, and **what
 > differs between local dev and the deployed cloud setup**. Web-security and Cloudflare
@@ -9,7 +7,9 @@ _Last updated: 2026-06-08_
 >
 > This is also the canonical security walkthrough now: the posture, tradeoffs, and residual
 > caveats are folded in here so there's one document to read end-to-end. For deployment options
-> and future hosting directions, see [`roadmap/hosting.md`](./roadmap/hosting.md).
+> and future hosting directions, see [`roadmap/hosting.md`](./roadmap/hosting.md). This doc
+> describes how the system works **now**; for **why** a given tradeoff was made, see the
+> decision records in [`decisions/`](./decisions/README.md).
 
 ---
 
@@ -181,8 +181,9 @@ re-authenticate, from **Settings**, to import more.
 
 ### 3.1 Playlist sync model — Digest owns the list, YouTube is a source
 
-A deliberate decision (over the alternative of mirroring YouTube as the source of truth): once a
-playlist is imported, **the local copy is authoritative**. The user's ordering and removals are
+A deliberate decision (over the alternative of mirroring YouTube as the source of truth; see
+[ADR 0006](./decisions/0006-local-authoritative-playlist-sync.md)): once a playlist is imported,
+**the local copy is authoritative**. The user's ordering and removals are
 sacred; YouTube is only ever a *source* to pull from. This is the natural fit because the app
 already centres on local editing (reorder, remove, the upstream-less `Saved videos` list), and
 because the `youtube.readonly` scope means edits could never be written back upstream anyway — so a
@@ -232,7 +233,7 @@ There are **two** npm scripts, and the difference is just **whether the Function
 Both serve over **plain HTTP** on `localhost`. That's deliberately simple: `localhost` is a
 browser-trusted [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts),
 so the `Secure` `HttpOnly` cookies are still sent over `http`, and no local TLS / mkcert setup is
-needed. (We evaluated HTTPS-in-dev; see [§8.1](#81-csp-is-production-only).)
+needed. (We evaluated and rejected HTTPS-in-dev — see [ADR 0004](./decisions/0004-plain-http-in-dev.md).)
 
 ### 4.1 `npm run dev` — frontend only
 
@@ -328,7 +329,7 @@ The application code is identical. Only the *environment* changes:
 
 The easy-to-miss gap: **the entire CSP is production-only**. The `<meta>` tag is injected only at
 build time and `_headers` is applied only by Cloudflare, so locally there's no CSP at all (see
-[§8.1](#81-csp-is-production-only)). To exercise the real policy — including `frame-ancestors` and
+[ADR 0003](./decisions/0003-csp-production-only.md)). To exercise the real policy — including `frame-ancestors` and
 that no resource is blocked — run `npm run build && npm run preview` (the `<meta>` CSP) or check the
 deployed site (the full header).
 
@@ -364,7 +365,7 @@ Pulling the threads together — why each defense is here:
   stripped — it can't be repurposed to hit arbitrary Google endpoints.
 - **Two CSPs.** The app shell's policy lives once in [`csp.ts`](../csp.ts) (injected as a
   `<meta>` tag at build time and emitted as a real header for prod; **not enforced in dev** — see
-  [§8.1](#81-csp-is-production-only)). The OAuth popup has its own **stricter** inline CSP in
+  [ADR 0003](./decisions/0003-csp-production-only.md)). The OAuth popup has its own **stricter** inline CSP in
   [`popupResponse`](../functions/_lib/google.ts) (`default-src 'none'`), deliberately not derived
   from `csp.ts`.
 
@@ -423,45 +424,22 @@ backend broadening as a new trust-boundary decision.
 
 ---
 
-## 8. Where the complexity actually is (for the simplification decision)
+## 8. Design decisions (the "why")
 
-Taking stock before changing anything — the parts that add build/branching surface:
+The reasoning behind the tradeoffs above — including the ones that shaped where complexity and
+build/branching surface live — is captured as append-only decision records in
+[`decisions/`](./decisions/README.md) rather than restated here. The ones most relevant to this doc:
 
-### 8.1 CSP is production-only
-The CSP is **not enforced in the Vite dev server** — `injectCspMeta` is `apply: 'build'`, and
-`_headers` is applied only by Cloudflare. This is deliberate. CSP exists to limit damage from
-injected script in production; in dev it protects only a short-lived, `youtube.readonly`,
-in-memory access token on `localhost` with no untrusted input — negligible value — while actively
-fighting the toolchain. We hit this twice: the `youtube-player` library derives the IFrame API URL
-from `window.location.protocol`, so on `http://localhost` it loads `http://www.youtube.com/...`
-(blocked by an https-only `script-src`); and Vite injects inline HMR / React-refresh `<script>`s
-that a `script-src` without `'unsafe-inline'` blocks outright, so the app wouldn't even load.
+- **[ADR 0002](./decisions/0002-serverless-broker-secrets-in-httponly-cookies.md)** — why secrets
+  live in HttpOnly cookies behind a thin same-origin broker (§2, §7).
+- **[ADR 0003](./decisions/0003-csp-production-only.md)** — why the CSP is production-only and not
+  enforced in dev (§4, §6).
+- **[ADR 0004](./decisions/0004-plain-http-in-dev.md)** — why dev stays on plain HTTP and HTTPS-in-dev
+  was rejected (§4).
+- **[ADR 0005](./decisions/0005-no-oauth-api-key-build-toggle.md)** — why the OAuth/API-key build
+  toggle was removed and both paths are always on at runtime.
+- **[ADR 0006](./decisions/0006-local-authoritative-playlist-sync.md)** — why the local playlist is
+  authoritative and YouTube is only a source (§3.1).
 
-A dev CSP could never match prod anyway (prod has no inline HMR scripts), so it gives a false sense
-of parity. The real policy is verified where it's real: `npm run build && npm run preview` exercises
-the strict `<meta>`, and the deployed site exercises the full `_headers` response header. The single
-source in [`csp.ts`](../csp.ts) means there's exactly one policy to keep correct.
-
-> Related: we also evaluated serving **dev over HTTPS** (which would have let the IFrame API load
-> over https). It's not viable cleanly — `wrangler pages dev --proxy` can't terminate TLS to a Vite
-> upstream (deprecated; with `--local-protocol https` it proxies over HTTPS and Node/undici won't
-> trust the mkcert CA, so every request 502s). The working flip (Vite serves HTTPS, proxies to
-> wrangler) costs a mkcert CA install, two processes, a dev origin change to `:5174`, and a new
-> Google redirect URI. Not worth it — plain HTTP on `localhost` (a secure context, so cookies still
-> work) plus a production-only CSP is simpler.
-
-### 8.2 No OAuth/API-key build toggle (both are always on)
-There used to be a `VITE_AUTH_BASE=` (empty) build flag that flipped an `OAUTH_ENABLED` constant
-to hide the Google sign-in branch entirely — a second onboarding UI variant, an extra documented
-build mode, and `isOAuthConfigured()` checks scattered across components. It was **removed**: the
-toggle never bought a simpler deployment (the `/api` proxy + `/api/key` endpoints are required
-either way, so you still deploy the Functions, create a Google Cloud project, and need an API key —
-it only saved setting two secrets), so it wasn't worth the branching.
-
-Now **both ways in are always available at runtime**: [`ApiKeyGate`](../src/components/ApiKeyGate.tsx)
-is a single UI offering sign-in *and* a public API key, [`config.ts`](../src/lib/config.ts) is just
-`AUTH_BASE = '/auth'`, and [`getValidToken`](../src/lib/oauth.ts) always attempts a refresh (a dead
-session returns `null` gracefully). The only consequence: a deployment that didn't set
-`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` still shows a sign-in button, which errors on use
-(`/auth/login` → 500) — users just fall back to the API key. A real deployment wants the secrets
-anyway.
+When a tradeoff here changes, record a new ADR (or supersede an existing one) rather than editing
+the history in place.
