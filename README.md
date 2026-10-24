@@ -18,6 +18,8 @@ reach your private playlists, or use a public API key for public/unlisted conten
 - **Watch progress**: finished videos are marked, and playback **resumes** where you
   left off.
 - Manage **multiple lists**, drag to **reorder** lists and videos, and remove items.
+- Create **your own lists** and save single videos into them (or into the default **Inbox**). A video
+  can be in several lists, and its watch progress is shared across them.
 - **Refresh** an imported playlist to pull in videos added or removed upstream — the sync merges
   rather than replaces, so it keeps your manual ordering and local removals intact.
 - Privacy-enhanced embeds via `youtube-nocookie.com`.

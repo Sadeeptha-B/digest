@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { isConsentRequired, REAUTH_MESSAGE, resolveAuth } from '../lib/oauth'
 import { refreshRestoredVideo, syncPlaylist } from '../lib/playlistSync'
 import { YouTubeApiError } from '../lib/youtube'
 import { timeAgo } from '../lib/time'
-import { CloseIcon, PlayIcon, RefreshIcon, RestoreIcon } from './Icons'
+import { isUserList } from '../types'
+import { CloseIcon, PencilIcon, PlayIcon, RefreshIcon, RestoreIcon } from './Icons'
 import { PlaylistVideoList } from './PlaylistVideoList'
 import { VideoThumbnail } from './VideoThumbnail'
 
@@ -22,11 +23,16 @@ export function PlaylistContents({
     const playlist = useStore((s) => s.playlists.find((p) => p.id === playlistId))
     const progress = useStore((s) => s.progress)
     const restoreVideoToPlaylist = useStore((s) => s.restoreVideoToPlaylist)
+    const renamePlaylist = useStore((s) => s.renamePlaylist)
     const navigate = useNavigate()
 
     const [refreshing, setRefreshing] = useState(false)
     const [refreshError, setRefreshError] = useState<string | null>(null)
     const [showRemoved, setShowRemoved] = useState(false)
+    // Inline title edit (user-made lists only); null when not editing.
+    const [draftTitle, setDraftTitle] = useState<string | null>(null)
+    // Set on Escape so the blur that follows unmounting the input doesn't save the draft.
+    const cancelRename = useRef(false)
 
     const ytPlaylistId = playlist?.ytPlaylistId
 
@@ -70,6 +76,7 @@ export function PlaylistContents({
         return <p className="text-sm text-zinc-500">Playlist not found.</p>
     }
 
+    const renamable = isUserList(playlist)
     const first = playlist.videoIds[0]
     const total = playlist.videoIds.length
     const watched = playlist.videoIds.filter((id) => progress[id]?.watched).length
@@ -78,7 +85,41 @@ export function PlaylistContents({
         <div className="flex h-full flex-col">
             <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-lg font-semibold text-white">{playlist.title}</h2>
+                    {draftTitle !== null ? (
+                        <input
+                            value={draftTitle}
+                            onChange={(e) => setDraftTitle(e.target.value)}
+                            onBlur={() => {
+                                if (!cancelRename.current) renamePlaylist(playlist.id, draftTitle)
+                                cancelRename.current = false
+                                setDraftTitle(null)
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') e.currentTarget.blur()
+                                if (e.key === 'Escape') {
+                                    cancelRename.current = true
+                                    e.currentTarget.blur()
+                                }
+                            }}
+                            aria-label="List name"
+                            autoFocus
+                            className="w-full rounded-lg border border-ink-700 bg-ink-900 px-2 py-0.5 text-lg font-semibold text-white outline-none focus:border-accent-500"
+                        />
+                    ) : (
+                        <div className="flex min-w-0 items-center gap-1">
+                            <h2 className="truncate text-lg font-semibold text-white">{playlist.title}</h2>
+                            {renamable && (
+                                <button
+                                    onClick={() => setDraftTitle(playlist.title)}
+                                    className="shrink-0 rounded-lg p-1 text-zinc-500 hover:bg-ink-800 hover:text-white"
+                                    aria-label="Rename list"
+                                    title="Rename list"
+                                >
+                                    <PencilIcon className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <p className="truncate text-xs text-zinc-500">
                         {playlist.channelTitle ? `${playlist.channelTitle} · ` : ''}
                         {watched}/{total} watched
@@ -120,7 +161,13 @@ export function PlaylistContents({
             {refreshError && <p className="mt-2 text-sm text-rose-400">{refreshError}</p>}
 
             <div className="mt-4 min-h-0 flex-1 overflow-y-auto scrollbar-slim">
-                <PlaylistVideoList playlistId={playlist.id} />
+                {total === 0 ? (
+                    <p className="py-6 text-center text-sm text-zinc-500">
+                        No videos yet. Paste a video URL above and choose this list.
+                    </p>
+                ) : (
+                    <PlaylistVideoList playlistId={playlist.id} />
+                )}
             </div>
 
             {ytPlaylistId && playlist.removedVideoIds.length > 0 && (

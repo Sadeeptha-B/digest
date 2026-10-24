@@ -167,7 +167,7 @@ export function Watch() {
                         <BackIcon className="h-5 w-5" />
                     </Link>
                     <span className="min-w-0 flex-1 truncate text-sm text-zinc-400">
-                        {playlist ? playlist.title : 'Saved videos'}
+                        {playlist ? playlist.title : 'Library'}
                     </span>
                     <button
                         onClick={() => setFocusMode(!focusMode)}

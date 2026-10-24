@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore'
 import { AddBar } from '../components/AddBar'
 import { GreetingBanner } from '../components/GreetingBanner'
 import { PlaylistContents } from '../components/PlaylistContents'
-import { PlayIcon, TrashIcon } from '../components/Icons'
+import { PlayIcon, PlusIcon, TrashIcon } from '../components/Icons'
 import { DragHandle, SortableList } from '../components/Sortable'
 import { useSortableRow } from '../components/useSortableRow'
 import type { Playlist } from '../types'
@@ -26,10 +26,12 @@ export function Library() {
             <div className="flex flex-col gap-6 lg:flex-row">
                 <div className={selected ? 'w-full lg:w-[400px] lg:shrink-0' : 'mx-auto w-full max-w-3xl'}>
                     <AddBar />
+                    <NewListButton onCreated={setSelectedId} />
 
                     {playlists.length === 0 ? (
                         <p className="mt-10 text-center text-sm text-zinc-500">
-                            No playlists yet. Paste a YouTube playlist or video URL above to get started.
+                            No playlists yet. Paste a YouTube playlist or video URL above, or create your
+                            own list, to get started.
                         </p>
                     ) : (
                         <div className="mt-6">
@@ -69,6 +71,67 @@ export function Library() {
                 )}
             </div>
         </div>
+    )
+}
+
+/** "+ New list" — expands into a name field; Enter creates the (empty) list and opens it. */
+function NewListButton({ onCreated }: { onCreated: (id: string) => void }) {
+    const createList = useStore((s) => s.createList)
+    const [editing, setEditing] = useState(false)
+    const [name, setName] = useState('')
+
+    function close() {
+        setEditing(false)
+        setName('')
+    }
+
+    if (!editing) {
+        return (
+            <button
+                onClick={() => setEditing(true)}
+                className="mt-2 flex items-center gap-1 text-sm text-accent-400 hover:underline"
+            >
+                <PlusIcon className="h-4 w-4" /> New list
+            </button>
+        )
+    }
+
+    return (
+        <form
+            className="mt-2 flex gap-2"
+            onSubmit={(e) => {
+                e.preventDefault()
+                if (!name.trim()) return
+                onCreated(createList(name))
+                close()
+            }}
+        >
+            <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Escape') close()
+                }}
+                placeholder="List name"
+                aria-label="New list name"
+                autoFocus
+                className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-white outline-none focus:border-accent-500"
+            />
+            <button
+                type="submit"
+                disabled={!name.trim()}
+                className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
+            >
+                Create
+            </button>
+            <button
+                type="button"
+                onClick={close}
+                className="rounded-lg px-2 py-1.5 text-sm text-zinc-400 hover:text-white"
+            >
+                Cancel
+            </button>
+        </form>
     )
 }
 

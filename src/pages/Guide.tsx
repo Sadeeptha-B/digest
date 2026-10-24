@@ -81,6 +81,13 @@ export function Guide() {
           ordering and anything you removed locally. Removed videos stay reviewable under{' '}
           <span className="text-zinc-200">Show removed</span>, where you can restore them.
         </p>
+        <p className="mt-3">
+          You can also make <span className="text-zinc-200">your own lists</span> with{' '}
+          <span className="text-zinc-200">New list</span>. When you paste a single video, choose
+          which list to save it to. The default is your <span className="text-zinc-200">Inbox</span>,
+          and you can rename it like any list you made. A video can be in several lists, and its
+          watch progress follows it everywhere.
+        </p>
       </Section>
 
       <Section title="How you get access — and where credentials go">

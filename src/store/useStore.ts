@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
-    SAVED_VIDEOS_ID,
+    INBOX_LIST_ID,
+    isUserList,
     type AccessToken,
     type FocusNote,
     type Playlist,
@@ -11,6 +12,7 @@ import {
     type Video,
 } from '../types'
 import { DEFAULT_ACCENT_THEME, type AccentTheme } from '../lib/themes'
+import { createId } from '../lib/id'
 
 interface StoreState {
     /** Whether a YouTube API key is configured. The key itself lives in a server-side HttpOnly
@@ -71,8 +73,13 @@ interface StoreState {
     upsertVideos: (videos: Video[]) => void
     addPlaylist: (playlist: Playlist) => void
     removePlaylist: (playlistId: string) => void
-    /** append a single standalone video into the reserved "Saved videos" list */
-    addStandaloneVideo: (video: Video) => void
+    /** create an empty user-made list and return its id */
+    createList: (title: string) => string
+    /** rename a user-made list (imported playlists take their title from YouTube on sync) */
+    renamePlaylist: (playlistId: string, title: string) => void
+    /** cache the video and append it to a user-made list (no-op if it's already there). Saving to
+     *  INBOX_LIST_ID recreates the Inbox if it doesn't exist. */
+    addVideoToList: (video: Video, playlistId: string) => void
 
     /**
      * Reconcile a stored playlist against a fresh fetch from YouTube. Preserves the user's video
@@ -122,6 +129,23 @@ const initialData = {
     },
     pomodoroSessions: {} as Record<string, PomodoroEvent[]>,
     focusNotes: [] as FocusNote[],
+}
+
+const INBOX_TITLE = 'Inbox'
+
+function newUserList(id: string, title: string): Playlist {
+    const now = Date.now()
+    return {
+        id,
+        ytPlaylistId: null,
+        title,
+        channelTitle: '',
+        videoIds: [],
+        removedVideoIds: [],
+        restoredVideoIds: [],
+        addedAt: now,
+        lastSyncedAt: now,
+    }
 }
 
 function mergePlaylist(existing: Playlist | undefined, incoming: Playlist): Playlist {
@@ -226,31 +250,40 @@ export const useStore = create<StoreState>()(
             removePlaylist: (playlistId) =>
                 set((s) => ({ playlists: s.playlists.filter((p) => p.id !== playlistId) })),
 
-            addStandaloneVideo: (video) =>
+            createList: (title) => {
+                const list = newUserList(createId(), title.trim() || 'Untitled list')
+                set((s) => ({ playlists: [...s.playlists, list] }))
+                return list.id
+            },
+
+            renamePlaylist: (playlistId, title) =>
+                set((s) => {
+                    const trimmed = title.trim()
+                    if (!trimmed) return s
+                    return {
+                        playlists: s.playlists.map((p) =>
+                            p.id === playlistId && isUserList(p) ? { ...p, title: trimmed } : p,
+                        ),
+                    }
+                }),
+
+            addVideoToList: (video, playlistId) =>
                 set((s) => {
                     const videos = { ...s.videos, [video.id]: video }
-                    const existing = s.playlists.find((p) => p.id === SAVED_VIDEOS_ID)
+                    const existing = s.playlists.find((p) => p.id === playlistId)
                     if (!existing) {
-                        const saved: Playlist = {
-                            id: SAVED_VIDEOS_ID,
-                            ytPlaylistId: null,
-                            title: 'Saved videos',
-                            channelTitle: '',
-                            videoIds: [video.id],
-                            removedVideoIds: [],
-                            restoredVideoIds: [],
-                            addedAt: Date.now(),
-                            lastSyncedAt: Date.now(),
-                        }
-                        return { videos, playlists: [saved, ...s.playlists] }
+                        // Only the Inbox is recreated on demand (first save, or after it was deleted).
+                        if (playlistId !== INBOX_LIST_ID) return s
+                        const inbox = { ...newUserList(INBOX_LIST_ID, INBOX_TITLE), videoIds: [video.id] }
+                        return { videos, playlists: [inbox, ...s.playlists] }
                     }
-                    // Immutably append (skip if already present) so subscribers re-render.
+                    if (!isUserList(existing)) return s
+                    // Immutably append (skip if already present — a list holds each video once, since
+                    // ids key the sortable rows and the queue) so subscribers re-render.
                     const playlists = existing.videoIds.includes(video.id)
                         ? s.playlists
                         : s.playlists.map((p) =>
-                            p.id === SAVED_VIDEOS_ID
-                                ? { ...p, videoIds: [...p.videoIds, video.id] }
-                                : p,
+                            p.id === playlistId ? { ...p, videoIds: [...p.videoIds, video.id] } : p,
                         )
                     return { videos, playlists }
                 }),
@@ -367,7 +400,7 @@ export const useStore = create<StoreState>()(
         }),
         {
             name: 'digest-store',
-            version: 9,
+            version: 10,
             // Persist everything except the short-lived access token (kept in memory only) and the
             // server-probed recallConfigured flag (always reconciled fresh on load).
             partialize: ({ accessToken: _omit, recallConfigured: _omitRecall, ...rest }) => rest,
@@ -380,6 +413,8 @@ export const useStore = create<StoreState>()(
             // v8 added playlist.restoredVideoIds so explicit restores survive later syncs.
             // v9 added settings.focusMode — backfill to true (focus scaffolding stays on for
             // existing users). See ADR 0010.
+            // v10 renamed the default "Saved videos" list to "Inbox" (same reserved id), unless the
+            // user had already changed its title. See ADR 0011.
             migrate: (persisted) => {
                 if (persisted && typeof persisted === 'object') {
                     const data = persisted as Record<string, unknown>
@@ -400,6 +435,7 @@ export const useStore = create<StoreState>()(
                             }
                             if (!Array.isArray(p.removedVideoIds)) p.removedVideoIds = []
                             if (!Array.isArray(p.restoredVideoIds)) p.restoredVideoIds = []
+                            if (p.id === INBOX_LIST_ID && p.title === 'Saved videos') p.title = INBOX_TITLE
                         }
                     }
                 }
