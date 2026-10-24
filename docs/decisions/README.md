@@ -25,5 +25,6 @@ See [`../../CLAUDE.md`](../../CLAUDE.md) for when to add one and how the doc tie
 | [0008](./0008-remove-official-captions-download.md) | Remove official `captions.download`; manual import only | Accepted |
 | [0009](./0009-bring-your-own-recall-key.md) | Recall summaries via per-user keys (no shared server key) | Accepted |
 | [0010](./0010-focus-mode-single-switch.md) | Focus mode is one switch over all focus scaffolding | Accepted |
+| [0011](./0011-user-made-lists.md) | User-made lists; a video may belong to many lists | Accepted |
 
 To add one, copy [`0000-template.md`](./0000-template.md) to the next number and append a row here.

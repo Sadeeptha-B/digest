@@ -185,7 +185,7 @@ A deliberate decision (over the alternative of mirroring YouTube as the source o
 [ADR 0006](./decisions/0006-local-authoritative-playlist-sync.md)): once a playlist is imported,
 **the local copy is authoritative**. The user's ordering and removals are
 sacred; YouTube is only ever a *source* to pull from. This is the natural fit because the app
-already centres on local editing (reorder, remove, the upstream-less `Saved videos` list), and
+already centres on local editing (reorder, remove, user-made lists like the Inbox), and
 because the `youtube.readonly` scope means edits could never be written back upstream anyway — so a
 true two-way mirror is impossible by construction.
 
@@ -218,6 +218,24 @@ Sync runs on demand (a Refresh button) and opportunistically: opening a playlist
 in 24h triggers one silent background sync. Ownership is irrelevant to all of this — an imported
 public playlist you don't own is treated identically to one of your own (it's a snapshot you
 curate, not a live mirror).
+
+### 3.2 Lists — imported vs. user-made
+
+There are two kinds of list, distinguished only by `Playlist.ytPlaylistId`:
+
+- **Imported** (`ytPlaylistId` set): a YouTube playlist, synced as in §3.1. Its title comes from
+  YouTube.
+- **User-made** (`ytPlaylistId: null`, [`isUserList`](../src/types.ts)): created in Digest with
+  **New list** ([`Library`](../src/pages/Library.tsx)), renamable from the list view, never synced.
+  The **Inbox** is the default one. It has the reserved id `INBOX_LIST_ID` and is recreated on the
+  next save if deleted.
+
+Pasting a single-video URL into the [`AddBar`](../src/components/AddBar.tsx) shows a **Save to**
+picker. The options are the Inbox (the default), any other user-made list, or **+ New list…**.
+Imported playlists aren't offered. `addVideoToList` caches the video and appends its id. A video
+can sit in many lists but at most once per list. Progress and other per-video state are keyed by
+video id, so they're shared across every list the video is in. For the rationale, see
+[ADR 0011](./decisions/0011-user-made-lists.md).
 
 ---
 
@@ -445,6 +463,8 @@ build/branching surface live — is captured as append-only decision records in
   toggle was removed and both paths are always on at runtime.
 - **[ADR 0006](./decisions/0006-local-authoritative-playlist-sync.md)** — why the local playlist is
   authoritative and YouTube is only a source (§3.1).
+- **[ADR 0011](./decisions/0011-user-made-lists.md)** — user-made lists, the Inbox, and why a video
+  may belong to many lists (§3.2).
 
 When a tradeoff here changes, record a new ADR (or supersede an existing one) rather than editing
 the history in place.

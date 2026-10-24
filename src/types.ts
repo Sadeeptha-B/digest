@@ -9,9 +9,9 @@ export interface Video {
 }
 
 export interface Playlist {
-    /** internal id (uuid). For the reserved saved-videos list this is SAVED_VIDEOS_ID */
+    /** internal id (uuid). For the reserved Inbox list this is INBOX_LIST_ID */
     id: string
-    /** YouTube playlist id, or null for the standalone "Saved videos" pseudo-list */
+    /** YouTube playlist id, or null for a user-made list (incl. the Inbox) */
     ytPlaylistId: string | null
     title: string
     channelTitle: string
@@ -85,4 +85,12 @@ export interface AccessToken {
     expiresAt: number
 }
 
-export const SAVED_VIDEOS_ID = 'saved-videos'
+/** Reserved id of the default user list (pasted videos land here). Kept as 'saved-videos' so
+ *  libraries persisted before the Inbox rename still resolve to the same list. */
+export const INBOX_LIST_ID = 'saved-videos'
+
+/** A list the user made in Digest (not imported from YouTube), so it accepts saved videos and can
+ *  be renamed. See ADR 0011. */
+export function isUserList(p: Playlist): boolean {
+    return !p.ytPlaylistId
+}

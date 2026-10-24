@@ -12,18 +12,32 @@ import {
 } from '../lib/youtube'
 import { isConsentRequired, REAUTH_MESSAGE, resolveAuth, tokenIsValid } from '../lib/oauth'
 import { createId } from '../lib/id'
-import type { Playlist } from '../types'
+import { INBOX_LIST_ID, isUserList, type Playlist } from '../types'
+
+/** "Save to" option that creates a list from the typed name instead of naming an existing one. */
+const NEW_LIST = '__new__'
+
+// The last "Save to" choice, kept for the session so saving several videos to one list doesn't
+// mean re-picking it each time (the AddBar remounts on every visit to the library).
+let lastSaveTarget = INBOX_LIST_ID
 
 export function AddBar() {
     const accessToken = useStore((s) => s.accessToken)
     const hasSignedIn = useStore((s) => s.hasSignedIn)
+    const playlists = useStore((s) => s.playlists)
     const upsertVideos = useStore((s) => s.upsertVideos)
     const addPlaylist = useStore((s) => s.addPlaylist)
-    const addStandaloneVideo = useStore((s) => s.addStandaloneVideo)
+    const createList = useStore((s) => s.createList)
+    const addVideoToList = useStore((s) => s.addVideoToList)
 
     const [value, setValue] = useState('')
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [notice, setNotice] = useState<string | null>(null)
+
+    // "Save to" target for single videos: a user-made list, or NEW_LIST plus a name.
+    const [saveTarget, setSaveTarget] = useState(lastSaveTarget)
+    const [newListName, setNewListName] = useState('')
 
     // "Import from my channel" picker state
     const [picker, setPicker] = useState<MyPlaylist[] | null>(null)
@@ -32,6 +46,23 @@ export function AddBar() {
     const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
 
     const signedIn = hasSignedIn || tokenIsValid(accessToken)
+
+    const isVideo = parseYouTubeInput(value).kind === 'video'
+    // Inbox first (offered even when it doesn't exist yet — saving recreates it), then the user's
+    // other lists in library order. Imported playlists aren't save targets (ADR 0011).
+    const userLists = playlists.filter((p) => isUserList(p) && p.id !== INBOX_LIST_ID)
+    const inboxTitle = playlists.find((p) => p.id === INBOX_LIST_ID)?.title ?? 'Inbox'
+    // Fall back to the Inbox if the remembered list has since been deleted.
+    const target =
+        saveTarget === NEW_LIST || saveTarget === INBOX_LIST_ID || userLists.some((p) => p.id === saveTarget)
+            ? saveTarget
+            : INBOX_LIST_ID
+    const needsListName = isVideo && target === NEW_LIST && !newListName.trim()
+
+    function chooseTarget(id: string) {
+        setSaveTarget(id)
+        if (id !== NEW_LIST) lastSaveTarget = id
+    }
 
     async function importPlaylist(playlistId: string, auth: Auth) {
         const [meta, videos] = await Promise.all([
@@ -76,6 +107,7 @@ export function AddBar() {
     async function handleAdd(e: React.FormEvent) {
         e.preventDefault()
         setError(null)
+        setNotice(null)
         const parsed = parseYouTubeInput(value)
         if (parsed.kind === 'unknown') {
             setError('Could not find a playlist or video in that input.')
@@ -88,7 +120,15 @@ export function AddBar() {
                 await importPlaylist(parsed.playlistId, auth)
             } else {
                 const video = await fetchVideo(parsed.videoId, auth)
-                addStandaloneVideo(video)
+                // Create a new list only once the fetch succeeded, so a failure leaves no empty list.
+                const listId = target === NEW_LIST ? createList(newListName) : target
+                addVideoToList(video, listId)
+                if (target === NEW_LIST) {
+                    chooseTarget(listId)
+                    setNewListName('')
+                }
+                const title = useStore.getState().playlists.find((p) => p.id === listId)?.title
+                if (title) setNotice(`Saved to “${title}”.`)
             }
             setValue('')
         } catch (err) {
@@ -157,18 +197,53 @@ export function AddBar() {
             <form className="flex gap-2" onSubmit={handleAdd}>
                 <input
                     value={value}
-                    onChange={(e) => setValue(e.target.value)}
+                    onChange={(e) => {
+                        setValue(e.target.value)
+                        setNotice(null)
+                    }}
                     placeholder="Paste a YouTube playlist or video URL…"
                     className="flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
                 />
                 <button
                     type="submit"
-                    disabled={busy || !value.trim()}
+                    disabled={busy || !value.trim() || needsListName}
                     className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-40"
                 >
                     {busy ? 'Adding…' : 'Add'}
                 </button>
             </form>
+
+            {isVideo && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <label htmlFor="save-target" className="text-xs text-zinc-500">
+                        Save to
+                    </label>
+                    <select
+                        id="save-target"
+                        value={target}
+                        onChange={(e) => chooseTarget(e.target.value)}
+                        className="rounded-lg border border-ink-700 bg-ink-900 px-2 py-1 text-sm text-white outline-none focus:border-accent-500"
+                    >
+                        <option value={INBOX_LIST_ID}>{inboxTitle}</option>
+                        {userLists.map((p) => (
+                            <option key={p.id} value={p.id}>
+                                {p.title}
+                            </option>
+                        ))}
+                        <option value={NEW_LIST}>+ New list…</option>
+                    </select>
+                    {target === NEW_LIST && (
+                        <input
+                            value={newListName}
+                            onChange={(e) => setNewListName(e.target.value)}
+                            placeholder="New list name"
+                            aria-label="New list name"
+                            autoFocus
+                            className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-2 py-1 text-sm text-white outline-none focus:border-accent-500"
+                        />
+                    )}
+                </div>
+            )}
 
             {signedIn && (
                 <button
@@ -185,6 +260,7 @@ export function AddBar() {
             )}
 
             {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+            {notice && !error && <p className="mt-2 text-sm text-zinc-400">{notice}</p>}
 
             {picker && (
                 <div className="mt-2 rounded-xl border border-ink-700 bg-ink-850 p-2">
