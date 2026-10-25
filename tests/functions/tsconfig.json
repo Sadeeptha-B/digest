@@ -1,0 +1,8 @@
+{
+  "comment": "Type-checks the Pages Functions tests against the Workers runtime types, like functions/tsconfig.json.",
+  "extends": "../../functions/tsconfig.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["./**/*.ts", "../../functions/**/*.ts"]
+}

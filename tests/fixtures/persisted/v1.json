@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "state": {
+    "apiKey": "AIzaSy-legacy-secret",
+    "oauthClientId": "legacy-client.apps.googleusercontent.com",
+    "playlists": [
+      { "id": "p1", "ytPlaylistId": "PLlegacy", "title": "Old playlist", "channelTitle": "Owner", "videoIds": ["v1", "v2"], "addedAt": 1000 }
+    ],
+    "videos": {},
+    "progress": { "v1": { "watched": true, "lastPositionSec": 0, "updatedAt": 1000 } },
+    "settings": { "pomodoroLengthMin": 30 }
+  }
+}

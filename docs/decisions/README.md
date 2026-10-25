@@ -26,5 +26,7 @@ See [`../../CLAUDE.md`](../../CLAUDE.md) for when to add one and how the doc tie
 | [0009](./0009-bring-your-own-recall-key.md) | Recall summaries via per-user keys (no shared server key) | Accepted |
 | [0010](./0010-focus-mode-single-switch.md) | Focus mode is one switch over all focus scaffolding | Accepted |
 | [0011](./0011-user-made-lists.md) | User-made lists; a video may belong to many lists | Accepted |
+| [0012](./0012-testing-strategy.md) | Layered Vitest suites; Playwright on the production build | Accepted |
+| [0013](./0013-focus-session-interruptions.md) | A focus session that stops early is logged as interrupted | Accepted |
 
 To add one, copy [`0000-template.md`](./0000-template.md) to the next number and append a row here.

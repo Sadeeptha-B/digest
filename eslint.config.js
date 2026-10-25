@@ -10,7 +10,7 @@ import tseslint from 'typescript-eslint'
 //   src/        → browser SPA          functions/ → Cloudflare Workers runtime
 //   scripts/, *.config.*, csp.ts → Node tooling
 export default tseslint.config(
-  { ignores: ['dist', 'dev-dist', '.wrangler'] },
+  { ignores: ['dist', 'dev-dist', '.wrangler', 'coverage', 'playwright-report', 'test-results'] },
 
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -48,6 +48,14 @@ export default tseslint.config(
     files: ['functions/**/*.ts'],
     languageOptions: {
       globals: { ...globals.serviceworker, ...globals.worker },
+    },
+  },
+
+  // Tests run in jsdom/node (Vitest) and drive a browser (Playwright): allow both sets of globals.
+  {
+    files: ['tests/**/*.{ts,tsx}', 'e2e/**/*.{ts,js}'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
     },
   },
 

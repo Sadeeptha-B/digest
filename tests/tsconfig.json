@@ -1,0 +1,20 @@
+{
+  "comment": "Type-checks the SPA test layers (domain/unit/components), the Playwright e2e specs and the test configs. The Functions tests have their own config (Workers types clash with lib.dom).",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../src",
+    "../e2e",
+    "../vitest.config.ts",
+    "../playwright.config.ts"
+  ],
+  "exclude": [
+    "./functions"
+  ]
+}

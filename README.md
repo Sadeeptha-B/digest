@@ -113,6 +113,21 @@ Linting is intentionally lightweight: `tsc -b` owns type correctness, while ESLi
 ([`eslint.config.js`](eslint.config.js)) catches what the compiler doesn't and scopes globals
 per runtime — browser for [`src/`](src), Workers for [`functions/`](functions), Node for tooling.
 
+### 5. Test
+
+```bash
+npm run typecheck      # tsc over src/, functions/, tests/ and e2e/
+npm test               # Vitest: domain, unit, Functions and component tests (no network needed)
+npm run test:watch     # the same, re-running on change
+npm run test:coverage  # with coverage; lib/, store/ and functions/ must stay at 90% lines
+npm run test:e2e       # Playwright: journeys on the production build + a wrangler smoke run
+```
+
+Run `npx playwright install chromium` once before the first `test:e2e`. The E2E run builds the app,
+fakes Google and YouTube, and ignores your `.dev.vars`, so it needs no account or secrets. CI runs all
+of the above on every PR ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)). What each layer
+covers, and why, is in [ADR 0012](docs/decisions/0012-testing-strategy.md).
+
 ## Install as an app (PWA)
 
 Digest is a PWA: open the production build (`npm run preview`, or your deployed Pages URL)
@@ -176,15 +191,23 @@ Then redeploy (Deployments → Retry/Redeploy) so the Functions pick them up. Th
 
 - The app builds at the **root** (`/`) of its own origin — no `BASE_PATH` needed (unlike the old
   GitHub Pages `/digest/` subpath).
-- Client-side routes use `BrowserRouter`; [`public/_redirects`](public/_redirects) rewrites deep
-  links back to `index.html` so refreshes still work.
+- Client-side routes use `BrowserRouter`. Deep links and refreshes work through Cloudflare Pages'
+  built-in SPA fallback, which needs no config; just don't add a top-level `404.html`
+  (see [architecture §5.2](docs/architecture.md#52-headers-and-the-spa-fallback)).
 - The CSP lives in one place — [`csp.ts`](csp.ts). The production build injects it as a `<meta>` tag
   and emits a `dist/_headers` file with the stronger real CSP response header (adding `frame-ancestors`),
   which Cloudflare Pages serves automatically. It is **not** enforced in the Vite dev server (CSP is a
-  production hardening measure, and enforcing it in dev breaks Vite's inline HMR scripts); verify the
-  real policy with `npm run build && npm run preview`.
-- Add your `https://<project>.pages.dev` to the YouTube **API key**'s referrer restrictions if you
-  use the API-key fallback.
+  production hardening measure, and enforcing it in dev breaks Vite's inline HMR scripts).
+- **Verifying the CSP:** `npm run test:e2e` runs the production build with the `<meta>` policy
+  enforced and fails on any violation; its smoke run checks the `_headers` response header. A manual
+  `npm run build && npm run preview` also enforces the `<meta>` policy, **but the YouTube player won't
+  load there**: on plain `http://localhost` the player library requests
+  `http://www.youtube.com/iframe_api`, which the HTTPS-only `script-src` blocks (expected, not a bug).
+  To check playback under the real policy, use a Pages **preview deployment** (every non-`main` branch
+  gets one over HTTPS) or production.
+- The YouTube **API key** needs an *API restriction* (YouTube Data API v3), **not** a referrer
+  restriction: it's used server-side by the `/api` proxy, where there is no browser `Referer`
+  (see [§2](#2-optional-api-key-for-public-only-no-sign-in-use)).
 - **Custom domain (optional):** add it under the project's **Custom domains** tab, then add
   `https://yourdomain.com/auth/callback` to the OAuth client's redirect URIs.
 
@@ -197,7 +220,8 @@ This README is the operator-facing quickstart. The rest of the docs are split by
 - **[docs/decisions/](docs/decisions/README.md)** — append-only decision records (ADRs): *why* a
   given tradeoff was made. Settled, never edited after the fact.
 - **[docs/roadmap/](docs/roadmap)** — forward-looking options ([hosting](docs/roadmap/hosting.md),
-  [transcripts](docs/roadmap/transcripts.md)); shrinks as items ship into ADRs.
+  [transcripts](docs/roadmap/transcripts.md), [playback queue](docs/roadmap/playback-queue.md));
+  shrinks as items ship into ADRs.
 
 See [CLAUDE.md](CLAUDE.md) for the discipline that keeps these from drifting into each other.
 

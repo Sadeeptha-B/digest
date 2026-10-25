@@ -1,0 +1,20 @@
+{
+  "version": 10,
+  "state": {
+    "apiKeyConfigured": false,
+    "hasSignedIn": false,
+    "playlists": [],
+    "videos": {},
+    "progress": {},
+    "transcripts": {},
+    "settings": {
+      "pomodoroLengthMin": 10,
+      "pomodoroResetThresholdMin": 20,
+      "accentTheme": "indigo",
+      "userName": "",
+      "focusMode": true
+    },
+    "pomodoroSessions": {},
+    "focusNotes": []
+  }
+}

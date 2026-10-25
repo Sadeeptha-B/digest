@@ -1,0 +1,17 @@
+{
+  "version": 9,
+  "state": {
+    "apiKeyConfigured": false,
+    "hasSignedIn": true,
+    "playlists": [
+      { "id": "saved-videos", "ytPlaylistId": null, "title": "Saved videos", "channelTitle": "", "videoIds": ["v1"], "removedVideoIds": [], "restoredVideoIds": [], "addedAt": 1000, "lastSyncedAt": 1000 },
+      { "id": "p1", "ytPlaylistId": "PLdupes", "title": "Has repeats", "channelTitle": "Owner", "videoIds": ["A", "B", "A", "C"], "removedVideoIds": [], "restoredVideoIds": [], "addedAt": 1000, "lastSyncedAt": 1000 }
+    ],
+    "videos": {},
+    "progress": {},
+    "transcripts": {},
+    "settings": { "pomodoroLengthMin": 25, "pomodoroResetThresholdMin": 5, "accentTheme": "indigo", "userName": "", "focusMode": false },
+    "pomodoroSessions": {},
+    "focusNotes": []
+  }
+}
