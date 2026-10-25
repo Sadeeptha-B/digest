@@ -26,7 +26,12 @@ export function parseCookies(header: string | null): Record<string, string> {
     for (const part of header.split(';')) {
         const i = part.indexOf('=')
         if (i < 0) continue
-        out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim())
+        try {
+            out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim())
+        } catch {
+            // Not one of ours (we always URL-encode). Skip it rather than failing the request —
+            // in dev, other apps on localhost share the cookie jar across ports.
+        }
     }
     return out
 }

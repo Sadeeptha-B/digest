@@ -6,7 +6,7 @@
 // source_url contains the YouTube video id, then fetch its content chunks. Chunks may carry
 // `timestamps` (e.g. ["01:23"]) that map onto the video for click-to-seek.
 
-import { parseYouTubeInput } from './parseUrl'
+import { extractVideoId } from './parseUrl'
 
 const RECALL_BASE = '/api/recall'
 
@@ -48,10 +48,10 @@ export function clearRecallCache(): void {
     cardCache.clear()
 }
 
+// Match on the video regardless of any `list=` in the saved URL: cards saved while watching
+// inside a playlist carry one, and parseYouTubeInput would read those as the playlist.
 function matchesVideoId(sourceUrl: string | undefined, videoId: string): boolean {
-    if (!sourceUrl) return false
-    const parsed = parseYouTubeInput(sourceUrl)
-    return parsed.kind === 'video' && parsed.videoId === videoId
+    return Boolean(sourceUrl) && extractVideoId(sourceUrl!) === videoId
 }
 
 function toChunk(value: unknown): RecallChunk | null {

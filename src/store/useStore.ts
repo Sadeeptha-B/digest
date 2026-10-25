@@ -131,7 +131,49 @@ const initialData = {
     focusNotes: [] as FocusNote[],
 }
 
+// Bumped by reset() (Clear all data). Async work that writes to the library (imports, syncs, metadata
+// refreshes, the player's position and focus logs) reads it before awaiting and commits only if it
+// hasn't changed, so an answer that lands after a reset can't fill the cleared library back in.
+// Cancelling the requests instead would miss one whose response is already being handled.
+let libraryEpoch = 0
+
+/** The library's current epoch. Compare with a value read before an await to detect a reset. */
+export const getLibraryEpoch = () => libraryEpoch
+
 const INBOX_TITLE = 'Inbox'
+
+type Settings = StoreState['settings']
+
+/** Supported Pomodoro block length, in whole minutes (the Settings UI reads its bounds from here). */
+export const POMODORO_LENGTH_RANGE = { min: 5, max: 60 } as const
+
+function clampWhole(value: unknown, min: number, max: number, fallback: number): number {
+    const n = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : fallback
+    return Math.min(max, Math.max(min, n))
+}
+
+/**
+ * Keep the Pomodoro settings valid together: a whole-minute block within POMODORO_LENGTH_RANGE, and
+ * a reset threshold ("pause within the first N minutes of a block") between 0 and the block length.
+ * Every write path — the setters and the persisted-state migration — goes through this, so the
+ * relationship can't be broken by one path and missed by another. Non-numeric values fall back to
+ * `previous` (the value being replaced).
+ */
+function normalizeSettings(next: Settings, previous: Settings = initialData.settings): Settings {
+    const pomodoroLengthMin = clampWhole(
+        next.pomodoroLengthMin,
+        POMODORO_LENGTH_RANGE.min,
+        POMODORO_LENGTH_RANGE.max,
+        previous.pomodoroLengthMin,
+    )
+    const pomodoroResetThresholdMin = clampWhole(
+        next.pomodoroResetThresholdMin,
+        0,
+        pomodoroLengthMin,
+        previous.pomodoroResetThresholdMin,
+    )
+    return { ...next, pomodoroLengthMin, pomodoroResetThresholdMin }
+}
 
 function newUserList(id: string, title: string): Playlist {
     const now = Date.now()
@@ -146,6 +188,21 @@ function newUserList(id: string, title: string): Playlist {
         addedAt: now,
         lastSyncedAt: now,
     }
+}
+
+/** Drop repeats, keeping each id's first position. A list holds a video at most once (ADR 0011),
+ *  but YouTube playlists may repeat one, so imported/synced ids pass through this. */
+function unique(ids: string[]): string[] {
+    return [...new Set(ids)]
+}
+
+/** Apply a requested order as a pure permutation of `current`: unknown or repeated ids are ignored
+ *  and any id the request left out is kept (appended), so a reorder can never add or lose items. */
+function permute(current: string[], ordered: string[]): string[] {
+    const known = new Set(current)
+    const placed = unique(ordered.filter((id) => known.has(id)))
+    const placedSet = new Set(placed)
+    return [...placed, ...current.filter((id) => !placedSet.has(id))]
 }
 
 function mergePlaylist(existing: Playlist | undefined, incoming: Playlist): Playlist {
@@ -191,9 +248,13 @@ export const useStore = create<StoreState>()(
                 }),
             setRecallConfigured: (value) => set({ recallConfigured: value }),
 
-            setPomodoroLength: (min) => set((s) => ({ settings: { ...s.settings, pomodoroLengthMin: min } })),
+            // Normalized together: shortening the block pulls the reset threshold down with it.
+            setPomodoroLength: (min) =>
+                set((s) => ({ settings: normalizeSettings({ ...s.settings, pomodoroLengthMin: min }, s.settings) })),
             setPomodoroResetThreshold: (min) =>
-                set((s) => ({ settings: { ...s.settings, pomodoroResetThresholdMin: min } })),
+                set((s) => ({
+                    settings: normalizeSettings({ ...s.settings, pomodoroResetThresholdMin: min }, s.settings),
+                })),
             setAccentTheme: (theme) => set((s) => ({ settings: { ...s.settings, accentTheme: theme } })),
             setUserName: (name) => set((s) => ({ settings: { ...s.settings, userName: name } })),
             setFocusMode: (value) => set((s) => ({ settings: { ...s.settings, focusMode: value } })),
@@ -233,8 +294,9 @@ export const useStore = create<StoreState>()(
                     return { videos }
                 }),
 
-            addPlaylist: (playlist) =>
+            addPlaylist: (incoming) =>
                 set((s) => {
+                    const playlist = { ...incoming, videoIds: unique(incoming.videoIds) }
                     // replace if a playlist with the same YouTube id already exists
                     const existingIdx = s.playlists.findIndex(
                         (p) => p.ytPlaylistId && p.ytPlaylistId === playlist.ytPlaylistId,
@@ -292,18 +354,19 @@ export const useStore = create<StoreState>()(
                 set((s) => {
                     const existing = s.playlists.find((p) => p.id === playlistId)
                     if (!existing) return s
-                    const remoteSet = new Set(remote.videoIds)
+                    const remoteIds = unique(remote.videoIds)
+                    const remoteSet = new Set(remoteIds)
                     const existingSet = new Set(existing.videoIds)
                     const tombstoned = new Set(existing.removedVideoIds)
                     const restored = new Set(existing.restoredVideoIds)
                     // Keep the user's order; drop videos gone upstream UNLESS the user explicitly
                     // restored them (those are pinned to the local copy).
-                    const retained = existing.videoIds.filter(
+                    const retained = unique(existing.videoIds).filter(
                         (id) => remoteSet.has(id) || restored.has(id),
                     )
                     // ...then append videos newly added upstream, in their YouTube order — but skip
                     // any the user has removed locally (tombstones), so sync never resurrects them.
-                    const added = remote.videoIds.filter(
+                    const added = remoteIds.filter(
                         (id) => !existingSet.has(id) && !tombstoned.has(id),
                     )
                     const videoIds = [...retained, ...added]
@@ -330,16 +393,17 @@ export const useStore = create<StoreState>()(
             reorderPlaylists: (orderedIds) =>
                 set((s) => {
                     const byId = new Map(s.playlists.map((p) => [p.id, p]))
-                    const playlists = orderedIds
-                        .map((id) => byId.get(id))
-                        .filter((p): p is Playlist => Boolean(p))
+                    const playlists = permute(
+                        s.playlists.map((p) => p.id),
+                        orderedIds,
+                    ).map((id) => byId.get(id)!)
                     return { playlists }
                 }),
 
             reorderVideos: (playlistId, orderedVideoIds) =>
                 set((s) => ({
                     playlists: s.playlists.map((p) =>
-                        p.id === playlistId ? { ...p, videoIds: orderedVideoIds } : p,
+                        p.id === playlistId ? { ...p, videoIds: permute(p.videoIds, orderedVideoIds) } : p,
                     ),
                 })),
 
@@ -396,11 +460,14 @@ export const useStore = create<StoreState>()(
                 return pl.videoIds[idx + 1]
             },
 
-            reset: () => set({ ...initialData }),
+            reset: () => {
+                libraryEpoch += 1
+                set({ ...initialData })
+            },
         }),
         {
             name: 'digest-store',
-            version: 10,
+            version: 11,
             // Persist everything except the short-lived access token (kept in memory only) and the
             // server-probed recallConfigured flag (always reconciled fresh on load).
             partialize: ({ accessToken: _omit, recallConfigured: _omitRecall, ...rest }) => rest,
@@ -415,7 +482,10 @@ export const useStore = create<StoreState>()(
             // existing users). See ADR 0010.
             // v10 renamed the default "Saved videos" list to "Inbox" (same reserved id), unless the
             // user had already changed its title. See ADR 0011.
-            migrate: (persisted) => {
+            // v11 dedupes playlist.videoIds: imports used to copy YouTube's repeats, breaking the
+            // once-per-list rule (ADR 0011) that row keys and the queue depend on. It also repairs
+            // Pomodoro settings older versions let drift apart (a threshold longer than its block).
+            migrate: (persisted, version) => {
                 if (persisted && typeof persisted === 'object') {
                     const data = persisted as Record<string, unknown>
                     delete data.oauthClientId
@@ -423,11 +493,10 @@ export const useStore = create<StoreState>()(
                     const settings = (data.settings ?? {}) as Record<string, unknown>
                     if (!settings.accentTheme) settings.accentTheme = DEFAULT_ACCENT_THEME
                     if (typeof settings.userName !== 'string') settings.userName = ''
-                    if (typeof settings.pomodoroResetThresholdMin !== 'number') {
-                        settings.pomodoroResetThresholdMin = 5
-                    }
                     if (typeof settings.focusMode !== 'boolean') settings.focusMode = true
-                    data.settings = settings
+                    // Backfills missing/invalid Pomodoro values and repairs combinations older
+                    // versions allowed (a threshold longer than its block).
+                    data.settings = normalizeSettings(settings as unknown as Settings)
                     if (Array.isArray(data.playlists)) {
                         for (const p of data.playlists as Array<Record<string, unknown>>) {
                             if (typeof p.lastSyncedAt !== 'number') {
@@ -435,7 +504,11 @@ export const useStore = create<StoreState>()(
                             }
                             if (!Array.isArray(p.removedVideoIds)) p.removedVideoIds = []
                             if (!Array.isArray(p.restoredVideoIds)) p.restoredVideoIds = []
-                            if (p.id === INBOX_LIST_ID && p.title === 'Saved videos') p.title = INBOX_TITLE
+                            // Only for pre-v10 state: after that, "Saved videos" is a title the user chose.
+                            if (version < 10 && p.id === INBOX_LIST_ID && p.title === 'Saved videos') {
+                                p.title = INBOX_TITLE
+                            }
+                            if (Array.isArray(p.videoIds)) p.videoIds = unique(p.videoIds as string[])
                         }
                     }
                 }

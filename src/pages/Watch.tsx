@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import YouTube, { type YouTubeEvent, type YouTubePlayer } from 'react-youtube'
-import { useStore } from '../store/useStore'
+import { getLibraryEpoch, useStore } from '../store/useStore'
 import { TranscriptPanel } from '../components/TranscriptPanel'
 import { UpNextPanel } from '../components/UpNextPanel'
 import { SummaryPanel } from '../components/SummaryPanel'
@@ -52,9 +52,16 @@ export function Watch() {
     usePageTitle(video?.title ?? null, video?.channelTitle || undefined)
 
     const playerRef = useRef<YouTubePlayer | null>(null)
-    // keep the latest videoId for the polling interval's closure
+    // The video the current player was created for (the player is remounted per video), and the video
+    // showing now. Player reads are async: what a player reports belongs to its own video, and is
+    // dropped if that's no longer the video showing by the time it answers.
+    const playerVideoIdRef = useRef(videoId)
     const videoIdRef = useRef(videoId)
     videoIdRef.current = videoId
+    const isCurrentPlayer = useCallback(
+        (player: YouTubePlayer) => playerRef.current === player && playerVideoIdRef.current === videoIdRef.current,
+        [],
+    )
 
     // Video duration (seconds), read from the player. 0 until known; reset between videos.
     const [durationSec, setDurationSec] = useState(0)
@@ -66,18 +73,22 @@ export function Watch() {
         const timer = window.setInterval(async () => {
             const player = playerRef.current
             if (!player) return
+            const id = playerVideoIdRef.current
+            const epoch = getLibraryEpoch()
             try {
                 const state = await player.getPlayerState()
                 if (state === PLAYING) {
                     const t = await player.getCurrentTime()
-                    if (typeof t === 'number' && t > 0) setPosition(videoIdRef.current, Math.floor(t))
+                    // Dropped if the user moved to another video, or cleared the library, meanwhile.
+                    if (!isCurrentPlayer(player) || epoch !== getLibraryEpoch()) return
+                    if (typeof t === 'number' && t > 0) setPosition(id, Math.floor(t))
                 }
             } catch {
                 /* player not ready */
             }
         }, 5000)
         return () => window.clearInterval(timer)
-    }, [setPosition])
+    }, [setPosition, isCurrentPlayer])
 
     const goToNext = useCallback(() => {
         const next = getNextVideoId(listId, videoId)
@@ -106,18 +117,19 @@ export function Watch() {
     const onReady = useCallback(
         async (e: YouTubeEvent) => {
             playerRef.current = e.target
+            playerVideoIdRef.current = videoId
             const resume = useStore.getState().progress[videoId]
             if (resume && !resume.watched && resume.lastPositionSec > 5) {
                 e.target.seekTo(resume.lastPositionSec, true)
             }
             try {
                 const d = await e.target.getDuration()
-                if (typeof d === 'number' && d > 0) setDurationSec(d)
+                if (isCurrentPlayer(e.target) && typeof d === 'number' && d > 0) setDurationSec(d)
             } catch {
                 /* duration not ready yet; falls back to the first PLAYING event */
             }
         },
-        [videoId],
+        [videoId, isCurrentPlayer],
     )
 
     const onStateChange = useCallback(
@@ -128,16 +140,19 @@ export function Watch() {
                 return
             }
             if (e.data === PLAYING && durationSec === 0) {
+                let d: unknown
                 try {
-                    const d = await e.target.getDuration()
-                    if (typeof d === 'number' && d > 0) setDurationSec(d)
+                    d = await e.target.getDuration()
                 } catch {
                     /* still not ready */
                 }
+                // The user moved to another video while it answered: this event was the old video's.
+                if (!isCurrentPlayer(e.target)) return
+                if (typeof d === 'number' && d > 0) setDurationSec(d)
             }
             handlePlayerState(e.data)
         },
-        [durationSec, handleEnded, handlePlayerState, finishVideo],
+        [durationSec, handleEnded, handlePlayerState, finishVideo, isCurrentPlayer],
     )
 
     if (!video) {
