@@ -32,3 +32,11 @@ pnpm-debug.log*
 
 # Local-only docs (not committed)
 docs/security-notes.md
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+
+# TypeScript incremental build state (tsc -b)
+tsconfig.tsbuildinfo

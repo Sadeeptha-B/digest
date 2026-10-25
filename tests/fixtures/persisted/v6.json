@@ -1,0 +1,16 @@
+{
+  "version": 6,
+  "state": {
+    "apiKeyConfigured": true,
+    "hasSignedIn": false,
+    "playlists": [
+      { "id": "p1", "ytPlaylistId": "PLsix", "title": "Six", "channelTitle": "Owner", "videoIds": ["v1"], "addedAt": 1000, "lastSyncedAt": 5000 }
+    ],
+    "videos": {},
+    "progress": {},
+    "transcripts": {},
+    "settings": { "pomodoroLengthMin": 25, "pomodoroResetThresholdMin": 3, "accentTheme": "teal", "userName": "Sam" },
+    "pomodoroSessions": {},
+    "focusNotes": []
+  }
+}

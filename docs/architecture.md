@@ -113,9 +113,18 @@ Step by step:
    `event.origin === window.location.origin`, and stores the access token **in memory only**.
 4. **[`/auth/refresh`](../functions/auth/refresh.ts)** (POST) mints a new access token from the
    refresh cookie. The SPA calls this silently on load and a minute before expiry
-   ([`getValidToken`](../src/lib/oauth.ts)). A `401` means "no live session → prompt sign-in."
+   ([`getValidToken`](../src/lib/oauth.ts)). A `401` means "no live session → prompt sign-in"; the
+   refresh cookie is dropped only when Google rejects the token itself (`invalid_grant`). Wrong
+   client credentials (`invalid_client`) return `500 server_misconfigured`, and a Google outage, network
+   failure or unreadable error returns `502`; both keep the session for a retry
+   ([`classifyTokenError`](../functions/_lib/google.ts)).
 5. **[`/auth/logout`](../functions/auth/logout.ts)** (POST) best-effort revokes the refresh
-   token at Google, then clears the cookie.
+   token at Google, then clears the cookie. In the SPA, [`signOut`](../src/lib/oauth.ts) ends the
+   in-memory session at once. A refresh still in flight from before can't restore it, and an old
+   refresh can't sign a newer sign-in back out. A plain **Sign out** doesn't wait for the server.
+   **Clear all data** always calls logout, even when the browser shows itself signed out, and waits
+   for it and both key deletions. If any of them fails, the library is kept, and a retry repeats all
+   three.
 
 **Why PKCE *and* a client secret?** This is a confidential (server-side) client, so the
 secret already authenticates the code exchange. PKCE is belt-and-suspenders: it binds the
@@ -149,7 +158,8 @@ adds it server-side:
 - Otherwise → inject the stored API-key cookie (public/unlisted only).
 - If neither → `401 no_credentials`.
 
-It's a **deliberately narrow allowlist** (`playlists`, `playlistItems`, `videos`, GET only) so
+It's a **deliberately narrow allowlist** (`playlists`, `playlistItems`, `videos`, and `channels` for
+prefilling the signed-in user's display name; GET only) so
 it can't be abused as an open proxy, and it strips any client-supplied `key` param before
 forwarding. The upstream body/status pass through unchanged so the SPA still sees Google's
 error messages.
@@ -178,6 +188,20 @@ imported, the playlists, videos, and progress live in localStorage and the [`Wat
 player is a plain IFrame embed, so viewing needs no credentials at all. A returning user therefore
 lands straight in their library even with an expired session (offline-friendly); they only need to
 re-authenticate, from **Settings**, to import more.
+
+**Clear all data** ends the server session, removes both keys and then calls `reset()`
+(§2.1). `reset()` also starts a new library epoch ([`getLibraryEpoch`](../src/store/useStore.ts)).
+Work still in flight from before it commits nothing when it answers: imports and single-video
+saves, background syncs, restored-video refreshes, transcript uploads, the startup key and Recall
+probes, the channel-name prefill, the player's position saves, and the focus-session log.
+
+**Focus-session logs.** `pomodoroSessions` holds an event log per video, appended by the Pomodoro
+engine ([`usePomodoro`](../src/hooks/usePomodoro.ts)) and replayed by the Stats tab
+([`summarizeSession`](../src/lib/sessionStats.ts)). A session ends with `done` when the video
+finishes. It ends with `interrupted` when focus mode is turned off or the user leaves the video, and
+the open stretch closes at the focus time it reached. A stretch still open when the next session
+starts, after a reload or crash, is dropped because its end is unknown
+([ADR 0013](./decisions/0013-focus-session-interruptions.md)).
 
 ### 3.1 Playlist sync model — Digest owns the list, YouTube is a source
 
@@ -320,15 +344,18 @@ from Cloudflare instead of your laptop.
 > `pages_build_output_dir`. That key conflicts with `wrangler pages dev --proxy` in wrangler v4,
 > so `dist` is passed explicitly to `wrangler pages deploy dist` (the `deploy` script) instead.
 
-### 5.2 Two static files that ship with the build
+### 5.2 Headers and the SPA fallback
 
 - **`dist/_headers`** — emitted from [`csp.ts`](../csp.ts) at build time (the `emitHeaders`
   Vite plugin). Cloudflare Pages reads this file and applies the **real CSP response header**
   plus the other security headers to every response. This is the production-grade CSP that
   includes `frame-ancestors 'none'`.
-- **`public/_redirects`** — `/* /index.html 200`, the SPA fallback so deep links / refreshes
-  on client-side routes don't 404. Cloudflare serves real files first, so this only catches
-  unmatched paths.
+- **The SPA fallback is Cloudflare Pages' own.** When a build has no top-level `404.html`, Pages
+  treats it as a single-page app and serves `index.html` for any path that isn't a real file, so
+  deep links and refreshes on client-side routes work with no rule at all. (A `_redirects` rule
+  like `/* /index.html 200` is rejected by Pages as an infinite loop and ignored.) **Never add a
+  top-level `404.html`** — it would switch this off; the E2E smoke run checks both the fallback
+  and the file's absence.
 
 ---
 
@@ -349,9 +376,12 @@ The application code is identical. Only the *environment* changes:
 
 The easy-to-miss gap: **the entire CSP is production-only**. The `<meta>` tag is injected only at
 build time and `_headers` is applied only by Cloudflare, so locally there's no CSP at all (see
-[ADR 0003](./decisions/0003-csp-production-only.md)). To exercise the real policy — including `frame-ancestors` and
-that no resource is blocked — run `npm run build && npm run preview` (the `<meta>` CSP) or check the
-deployed site (the full header).
+[ADR 0003](./decisions/0003-csp-production-only.md)). The E2E suite runs the production build with the
+`<meta>` CSP enforced and its smoke run checks the `_headers` header ([ADR 0012](./decisions/0012-testing-strategy.md)).
+`npm run build && npm run preview` enforces the `<meta>` CSP by hand too, except that the YouTube player
+can't load there: over plain `http://localhost` the player library requests the IFrame API over `http:`,
+which the HTTPS-only `script-src` blocks. Playback under the full policy (including `frame-ancestors`)
+is checked on a Pages preview deployment or the deployed site.
 
 ---
 
@@ -465,6 +495,8 @@ build/branching surface live — is captured as append-only decision records in
   authoritative and YouTube is only a source (§3.1).
 - **[ADR 0011](./decisions/0011-user-made-lists.md)** — user-made lists, the Inbox, and why a video
   may belong to many lists (§3.2).
+- **[ADR 0012](./decisions/0012-testing-strategy.md)** — how the system is tested: which layer
+  covers what, and why E2E runs against the production build.
 
 When a tradeoff here changes, record a new ADR (or supersede an existing one) rather than editing
 the history in place.
