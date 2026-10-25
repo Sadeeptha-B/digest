@@ -163,7 +163,10 @@ export function PlaylistContents({
             <div className="mt-4 min-h-0 flex-1 overflow-y-auto scrollbar-slim">
                 {total === 0 ? (
                     <p className="py-6 text-center text-sm text-zinc-500">
-                        No videos yet. Paste a video URL above and choose this list.
+                        {/* Only user-made lists accept saved videos (ADR 0011). */}
+                        {renamable
+                            ? 'No videos yet. Paste a video URL above and choose this list.'
+                            : 'No videos in this playlist.'}
                     </p>
                 ) : (
                     <PlaylistVideoList playlistId={playlist.id} />

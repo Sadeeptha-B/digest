@@ -30,16 +30,26 @@ interface OAuthMessage {
     error_description?: string
 }
 
+// Bumped by every sign-in and sign-out. A refresh that was in flight when the session changed must
+// not apply its answer: it would undo a sign-out, or sign a newer sign-in back out.
+let sessionGeneration = 0
+
 function clearSessionState(): void {
     useStore.getState().setAccessToken(null)
     useStore.getState().setHasSignedIn(false)
 }
 
-function toAccessToken(accessToken: string, expiresIn: number): AccessToken {
+/** The access token in a broker payload (the popup message or /auth/refresh), or null if the payload
+ *  doesn't carry a usable one. Both paths go through this, so neither can store a broken token. */
+function toAccessToken(payload: unknown): AccessToken | null {
+    if (!payload || typeof payload !== 'object') return null
+    const { access_token, expires_in } = payload as Record<string, unknown>
+    if (typeof access_token !== 'string' || !access_token) return null
+    if (typeof expires_in !== 'number' || !Number.isFinite(expires_in)) return null
     return {
-        value: accessToken,
+        value: access_token,
         // refresh a minute early to avoid edge-of-expiry failures
-        expiresAt: Date.now() + Math.max(expiresIn - 60, 0) * 1000,
+        expiresAt: Date.now() + Math.max(expires_in - 60, 0) * 1000,
     }
 }
 
@@ -78,11 +88,11 @@ function openAuthPopup(): Promise<AccessToken> {
                 finish(() => reject(new OAuthError(data.error!, data.error_description || data.error!)))
                 return
             }
-            if (!data.access_token || typeof data.expires_in !== 'number') {
+            const token = toAccessToken(data)
+            if (!token) {
                 finish(() => reject(new OAuthError('invalid_response', 'Sign-in returned no token.')))
                 return
             }
-            const token = toAccessToken(data.access_token, data.expires_in)
             finish(() => resolve(token))
         }
 
@@ -97,27 +107,40 @@ function openAuthPopup(): Promise<AccessToken> {
 /** Interactive sign-in. Stores the resulting access token in the Zustand store. */
 export async function signIn(): Promise<AccessToken> {
     const token = await openAuthPopup()
+    sessionGeneration++
     useStore.getState().setAccessToken(token)
     useStore.getState().setHasSignedIn(true)
     return token
 }
 
-/** Revoke the server-side session and clear the in-memory token. */
-export function signOut(): void {
-    void fetch(`${AUTH_BASE}/logout`, { method: 'POST', credentials: 'same-origin' }).catch(() => { })
+/**
+ * Sign out: the in-memory session ends at once, and the server revokes the refresh token and clears
+ * its cookie. Resolves once the server confirms; rejects when the browser couldn't reach it, so the
+ * cookie may still be set. A plain sign-out treats that as best effort, while Clear all data waits.
+ */
+export async function signOut(): Promise<void> {
+    sessionGeneration++
     clearSessionState()
+    const res = await fetch(`${AUTH_BASE}/logout`, { method: 'POST', credentials: 'same-origin' }).catch(() => null)
+    if (!res?.ok) throw new OAuthError('logout_failed', 'Could not end the session on the server.')
 }
 
 /** Ask the backend for a fresh access token using the refresh cookie. Null when no live session. */
 async function refresh(): Promise<AccessToken | null> {
+    const generation = sessionGeneration
     const res = await fetch(`${AUTH_BASE}/refresh`, { method: 'POST', credentials: 'same-origin' })
+    // A 200 we can't read as a token is a server problem, not a lost session: keep it for a retry.
+    const token = res.ok ? toAccessToken(await res.json().catch(() => null)) : null
+    if (generation !== sessionGeneration) {
+        // The user signed in or out meanwhile; that session stands, whatever this answer says.
+        const current = useStore.getState().accessToken
+        return tokenIsValid(current) ? current : null
+    }
     if (res.status === 401) {
         clearSessionState()
         return null
     }
-    if (!res.ok) throw new OAuthError('auth_unavailable', 'Could not refresh the session.')
-    const data = (await res.json()) as { access_token: string; expires_in: number }
-    const token = toAccessToken(data.access_token, data.expires_in)
+    if (!token) throw new OAuthError('auth_unavailable', 'Could not refresh the session.')
     useStore.getState().setAccessToken(token)
     useStore.getState().setHasSignedIn(true)
     return token

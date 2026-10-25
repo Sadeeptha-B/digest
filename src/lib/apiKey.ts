@@ -1,4 +1,4 @@
-import { useStore } from '../store/useStore'
+import { getLibraryEpoch, useStore } from '../store/useStore'
 
 // The YouTube API key is stored server-side in an HttpOnly cookie (see /functions/api/key). The
 // browser never holds the value; it only tracks a boolean "is a key configured" for gating the UI,
@@ -47,10 +47,13 @@ export async function clearApiKey(): Promise<void> {
 
 /** Reconcile the persisted boolean with the authoritative server cookie. Returns the live value. */
 export async function refreshApiKeyStatus(): Promise<boolean> {
+    const epoch = getLibraryEpoch()
     try {
         const res = await fetch(KEY_ENDPOINT, { method: 'GET', credentials: 'same-origin' })
         if (!res.ok) throw new Error('Could not refresh API key status.')
         const { configured } = (await res.json()) as { configured: boolean }
+        // Asked before Clear all data, which removed the key: this answer is out of date.
+        if (epoch !== getLibraryEpoch()) return useStore.getState().apiKeyConfigured
         setConfigured(configured)
         return configured
     } catch {

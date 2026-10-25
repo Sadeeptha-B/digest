@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useStore } from '../store/useStore'
+import { getLibraryEpoch, useStore } from '../store/useStore'
 import { parseYouTubeInput } from '../lib/parseUrl'
 import {
     fetchAllPlaylistItems,
@@ -64,11 +64,13 @@ export function AddBar() {
         if (id !== NEW_LIST) lastSaveTarget = id
     }
 
-    async function importPlaylist(playlistId: string, auth: Auth) {
+    /** Import into the library of `epoch` (getLibraryEpoch), or not at all if it was cleared meanwhile. */
+    async function importPlaylist(playlistId: string, auth: Auth, epoch: number) {
         const [meta, videos] = await Promise.all([
             fetchPlaylistMeta(playlistId, auth),
             fetchAllPlaylistItems(playlistId, auth),
         ])
+        if (epoch !== getLibraryEpoch()) return
         upsertVideos(videos)
         const playlist: Playlist = {
             id: createId(),
@@ -114,12 +116,14 @@ export function AddBar() {
             return
         }
         setBusy(true)
+        const epoch = getLibraryEpoch()
         try {
             const auth = await resolveAuth()
             if (parsed.kind === 'playlist') {
-                await importPlaylist(parsed.playlistId, auth)
+                await importPlaylist(parsed.playlistId, auth, epoch)
             } else {
                 const video = await fetchVideo(parsed.videoId, auth)
+                if (epoch !== getLibraryEpoch()) return // the library was cleared meanwhile
                 // Create a new list only once the fetch succeeded, so a failure leaves no empty list.
                 const listId = target === NEW_LIST ? createList(newListName) : target
                 addVideoToList(video, listId)
@@ -171,12 +175,14 @@ export function AddBar() {
         setPicker(null)
         setBusy(true)
         setImportProgress({ done: 0, total: ids.length })
+        const epoch = getLibraryEpoch()
         try {
             const auth = await resolveAuth()
             const failures: string[] = []
             for (let i = 0; i < ids.length; i++) {
+                if (epoch !== getLibraryEpoch()) break // the library was cleared: stop spending quota
                 try {
-                    await importPlaylist(ids[i], auth)
+                    await importPlaylist(ids[i], auth, epoch)
                 } catch {
                     failures.push(ids[i])
                 }

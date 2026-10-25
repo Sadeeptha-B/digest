@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { YouTubePlayer } from 'react-youtube'
-import { useStore } from '../store/useStore'
-import type { PomodoroEventType } from '../types'
+import { getLibraryEpoch, useStore } from '../store/useStore'
+import type { PomodoroEvent, PomodoroEventType } from '../types'
 
 // YT.PlayerState values we care about.
 const ENDED = 0
@@ -100,11 +100,20 @@ export function usePomodoro({
     // Programmatic pauses land in a phase that already ignores PAUSED, but a late event can race
     // a fast user action; swallow PAUSED briefly after we pause the player ourselves.
     const ignorePauseUntilRef = useRef(0)
+    // Bumped on every reset (video switch, focus off, unmount). Player reads are async, so a read
+    // still in flight from an earlier session checks this before acting on its answer.
+    const sessionRef = useRef(0)
+    // The library epoch the session started in. Once Clear all data has run, the session writes
+    // nothing more, including the `interrupted` it would log as the watch page unmounts.
+    const libraryEpochRef = useRef(0)
 
     // Rebuilt every render so the closures capture the latest props; the interval and the
     // exposed handlers call through `fnsRef` to stay stable.
+    const record = (forVideoId: string, event: PomodoroEvent) => {
+        if (libraryEpochRef.current === getLibraryEpoch()) logPomodoroEvent(forVideoId, event)
+    }
     const log = (type: PomodoroEventType, extra?: { index?: number; stretchSec?: number }) =>
-        logPomodoroEvent(videoId, { type, at: Date.now(), ...extra })
+        record(videoId, { type, at: Date.now(), ...extra })
 
     const projectTotal = (fromContentSec: number, done: number) => {
         const remaining = Math.max(0, durationSec - fromContentSec)
@@ -181,8 +190,19 @@ export function usePomodoro({
         }
         return blockStartRef.current
     }
+    // Read the content time for a decision taken in the current phase. Null when the engine moved on
+    // while the player answered (a reset, or any change of phase such as a pause), so a stale read
+    // never overrides the newer state. A pause already resumed by then has been superseded, and the
+    // read still counts.
+    const readTimeForPhase = async (): Promise<number | null> => {
+        const session = sessionRef.current
+        const phase = phaseRef.current
+        const t = await readTime()
+        return session === sessionRef.current && phase === phaseRef.current ? t : null
+    }
 
     function resetEngine() {
+        sessionRef.current += 1
         phaseRef.current = 'idle'
         doneRef.current = 0
         rampAccumRef.current = 0
@@ -200,6 +220,7 @@ export function usePomodoro({
 
     function startSession() {
         if (phaseRef.current !== 'idle') return
+        libraryEpochRef.current = getLibraryEpoch()
         doneRef.current = 0
         rampAccumRef.current = 0
         phaseRef.current = 'onramp'
@@ -212,6 +233,12 @@ export function usePomodoro({
     // Focused duration of the current stretch, excluding any time it was held (paused).
     const stretchSeconds = () =>
         Math.max(0, Math.round((Date.now() - workStartRef.current - blockHeldMsRef.current) / 1000))
+
+    // The stretch's focus time as it ends now. Ending mid-hold: the ongoing hold isn't focus time either.
+    function endStretch() {
+        if (phaseRef.current === 'workHeld') blockHeldMsRef.current += Date.now() - holdStartRef.current
+        return stretchSeconds()
+    }
 
     function startWork(anchorSec: number) {
         blockStartRef.current = anchorSec
@@ -246,7 +273,7 @@ export function usePomodoro({
         const p = phaseRef.current
         if (p === 'offramp' || p === 'done' || p === 'idle') return
         if (p === 'work' || p === 'workHeld') {
-            const stretchSec = stretchSeconds()
+            const stretchSec = endStretch()
             log('work-complete', { index: doneRef.current, stretchSec })
             doneRef.current += 1
         }
@@ -263,6 +290,16 @@ export function usePomodoro({
         log('done')
         show('done')
         onSessionEnd()
+    }
+
+    // A session that stops before the video ends (focus mode turned off, or the user left the video)
+    // is logged as `interrupted`, closing any open work stretch at the focus time it reached. It is not
+    // logged as a completed block, which it wasn't, and the Stats tab stops counting it.
+    function interrupt(forVideoId = videoId) {
+        const p = phaseRef.current
+        if (p === 'idle' || p === 'done') return
+        const stretch = p === 'work' || p === 'workHeld' ? { stretchSec: endStretch() } : {}
+        record(forVideoId, { type: 'interrupted', at: Date.now(), index: doneRef.current, ...stretch })
     }
 
     // Pause the current work block. `viaNative` = the user paused via the YouTube controls
@@ -290,7 +327,8 @@ export function usePomodoro({
     // Resume after a reset: a fresh full block from the current position.
     async function resumeWork() {
         if (phaseRef.current !== 'workPaused') return
-        const t = await readTime()
+        const t = await readTimeForPhase()
+        if (t === null) return
         log('resume', { index: doneRef.current })
         startWork(t)
     }
@@ -336,6 +374,12 @@ export function usePomodoro({
         endBreak('break-skipped')
     }
 
+    // Pressing play during the onramp skips straight to the first block, from wherever the video is.
+    async function skipOnramp() {
+        const t = await readTimeForPhase()
+        if (t !== null) startWork(t)
+    }
+
     function handlePlayerState(state: number) {
         const p = phaseRef.current
         if (state === PAUSED) {
@@ -344,7 +388,7 @@ export function usePomodoro({
         } else if (state === PLAYING) {
             if (p === 'workPaused') void resumeWork()
             else if (p === 'workHeld') resumeHeld()
-            else if (p === 'onramp' || p === 'onrampPaused') void readTime().then(startWork)
+            else if (p === 'onramp' || p === 'onrampPaused') void skipOnramp()
             else if (p === 'break') skipBreak()
         }
     }
@@ -365,14 +409,17 @@ export function usePomodoro({
         const now = Date.now()
         switch (phase) {
             case 'onramp': {
-                lastTimeRef.current = await readTime()
+                const t = await readTimeForPhase()
+                if (t === null) break
+                lastTimeRef.current = t
                 const remaining = ONRAMP_SEC - (rampAccumRef.current + (now - phaseStartRef.current) / 1000)
                 if (remaining <= 0) startWork(lastTimeRef.current)
                 else show('onramp', { rampRemainingSec: remaining })
                 break
             }
             case 'work': {
-                const t = await readTime()
+                const t = await readTimeForPhase()
+                if (t === null) break
                 lastTimeRef.current = t
                 const remaining = blockEndRef.current - t
                 const isLast = blockEndRef.current >= durationSec - 0.5
@@ -411,12 +458,17 @@ export function usePomodoro({
         skipBreak,
         pause,
         resume,
+        interrupt,
     })
-    fnsRef.current = { tick, startSession, handlePlayerState, handleEnded, skipBreak, pause, resume }
+    fnsRef.current = { tick, startSession, handlePlayerState, handleEnded, skipBreak, pause, resume, interrupt }
 
-    // Reset the engine when switching videos.
+    // Reset the engine when the video changes or the page closes. A session still running then is
+    // interrupted and logged under the video it belonged to, not the one that replaced it.
     useEffect(() => {
-        resetEngine()
+        return () => {
+            fnsRef.current.interrupt(videoId)
+            resetEngine()
+        }
     }, [videoId])
 
     // Auto-start the onramp once the video is known to be long enough. Keyed on `enabled` only:
@@ -436,6 +488,7 @@ export function usePomodoro({
                 /* not ready */
             }
         }
+        fnsRef.current.interrupt()
         resetEngine()
     }, [enabled, playerRef])
 

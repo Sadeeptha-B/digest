@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { YouTubePlayer } from 'react-youtube'
-import { useStore } from '../store/useStore'
-import { parseCaptionFile } from '../lib/captions'
+import { getLibraryEpoch, useStore } from '../store/useStore'
+import { activeLineIndex, parseCaptionFile } from '../lib/captions'
 import { fmt } from '../lib/time'
 import type { Video } from '../types'
 
@@ -32,8 +32,11 @@ export function TranscriptPanel({
     e.target.value = '' // allow re-selecting the same file later
     if (!file) return
     setFileError(null)
+    const epoch = getLibraryEpoch()
     try {
-      const lines = parseCaptionFile(await file.text())
+      const text = await file.text()
+      if (epoch !== getLibraryEpoch()) return // the library was cleared while the file was read
+      const lines = parseCaptionFile(text)
       if (lines.length === 0) {
         setFileError('No captions found in that file. Use a .vtt or .srt file.')
         return
@@ -55,13 +58,7 @@ export function TranscriptPanel({
       try {
         const t = await player.getCurrentTime()
         if (typeof t !== 'number') return
-        // last line whose start is <= current time
-        let idx = -1
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].startSec <= t + 0.25) idx = i
-          else break
-        }
-        setActiveIdx(idx)
+        setActiveIdx(activeLineIndex(lines, t))
       } catch {
         /* not ready */
       }

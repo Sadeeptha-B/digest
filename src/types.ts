@@ -68,6 +68,8 @@ export type PomodoroEventType =
     | 'break-complete'
     | 'offramp'
     | 'done'
+    /** the session stopped before the video ended: focus mode turned off, or the user left the video */
+    | 'interrupted'
 
 export interface PomodoroEvent {
     type: PomodoroEventType
@@ -75,7 +77,7 @@ export interface PomodoroEvent {
     at: number
     /** 0-based block index this event relates to */
     index?: number
-    /** duration of the just-ended work stretch, for work-complete / pause-reset */
+    /** duration of the just-ended work stretch, for work-complete / pause-reset / interrupted */
     stretchSec?: number
 }
 

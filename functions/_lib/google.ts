@@ -50,6 +50,57 @@ export function clearCookie(name: string, path = COOKIE_PATH): string {
     return expireCookie(name, path)
 }
 
+export interface TokenResponse {
+    access_token: string
+    expires_in: number
+    refresh_token?: string
+}
+
+/**
+ * Read a successful token-endpoint response. `fetch` resolves once headers arrive, so the body can
+ * still fail to read (truncated, not JSON) or not be a token at all (`null`, missing fields): any of
+ * those yields null, which callers treat as an upstream failure rather than throwing.
+ */
+export async function readTokenResponse(res: Response): Promise<TokenResponse | null> {
+    let body: unknown
+    try {
+        body = await res.json()
+    } catch {
+        return null
+    }
+    if (!body || typeof body !== 'object') return null
+    const { access_token, expires_in, refresh_token } = body as Record<string, unknown>
+    if (typeof access_token !== 'string' || !access_token) return null
+    if (typeof expires_in !== 'number' || !Number.isFinite(expires_in)) return null
+    return {
+        access_token,
+        expires_in,
+        ...(typeof refresh_token === 'string' && refresh_token ? { refresh_token } : {}),
+    }
+}
+
+/**
+ * What a failed token-endpoint response means, from Google's OAuth `error` code (RFC 6749 §5.2) —
+ * not from the HTTP status, which Google shares between unrelated errors (400/401 cover both a
+ * revoked token and our own bad client secret):
+ *   - 'grant_rejected': invalid_grant — the code/refresh token itself is dead (revoked, expired).
+ *   - 'misconfigured':  invalid_client / unauthorized_client — OUR credentials are wrong; an
+ *                       operator problem that must never cost a user their session.
+ *   - 'upstream':       anything else (invalid_request, unknown codes, unreadable bodies, 5xx) —
+ *                       treat as transient.
+ */
+export async function classifyTokenError(res: Response): Promise<'grant_rejected' | 'misconfigured' | 'upstream'> {
+    let code: unknown
+    try {
+        code = ((await res.json()) as { error?: unknown })?.error
+    } catch {
+        return 'upstream'
+    }
+    if (code === 'invalid_grant') return 'grant_rejected'
+    if (code === 'invalid_client' || code === 'unauthorized_client') return 'misconfigured'
+    return 'upstream'
+}
+
 function base64url(bytes: ArrayBuffer | Uint8Array): string {
     const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
     let str = ''

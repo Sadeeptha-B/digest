@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { useStore } from './store/useStore'
+import { getLibraryEpoch, useStore } from './store/useStore'
 import { getValidToken, tokenIsValid } from './lib/oauth'
 import { refreshApiKeyStatus } from './lib/apiKey'
 import { getRecallStatus } from './lib/recall'
@@ -46,8 +46,10 @@ export default function App() {
     // Probe whether this browser has a Recall key configured, so the Watch page knows whether to
     // offer the Summary tab. The key lives only server-side (see ADR 0009); this is a boolean.
     useEffect(() => {
+        const epoch = getLibraryEpoch()
         void getRecallStatus().then((configured) => {
-            useStore.getState().setRecallConfigured(configured)
+            // Not if Clear all data, which removes the Recall key, ran while this was asked.
+            if (epoch === getLibraryEpoch()) useStore.getState().setRecallConfigured(configured)
         })
     }, [])
 
@@ -56,9 +58,11 @@ export default function App() {
     useEffect(() => {
         if (userName || !accessToken || !tokenIsValid(accessToken)) return
         const token = accessToken.value
+        const epoch = getLibraryEpoch()
         void fetchMyChannelTitle({ token })
             .then((name) => {
-                if (name) useStore.getState().setUserName(name)
+                // Not if Clear all data ran meanwhile: the name would come back into a cleared library.
+                if (name && epoch === getLibraryEpoch()) useStore.getState().setUserName(name)
             })
             .catch(() => { })
     }, [accessToken, userName])
