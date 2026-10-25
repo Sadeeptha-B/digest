@@ -51,12 +51,16 @@ export function Library() {
                     )}
                 </div>
 
-                {/* Side panel (large screens) — only while a playlist is selected. */}
+                {/* Side panel (large screens) — only while a playlist is selected. Both layouts share
+                    one landmark name; CSS shows exactly one, so assistive tech sees one. */}
                 {selected && (
                     <div className="hidden min-w-0 flex-1 lg:block">
-                        <div className="sticky top-20 flex max-h-[calc(100vh-6rem)] flex-col rounded-2xl border border-ink-800 bg-ink-900/40 p-5">
+                        <aside
+                            aria-label="List contents"
+                            className="sticky top-20 flex max-h-[calc(100vh-6rem)] flex-col rounded-2xl border border-ink-800 bg-ink-900/40 p-5"
+                        >
                             <PlaylistContents playlistId={selected} onClose={() => setSelectedId(null)} />
-                        </div>
+                        </aside>
                     </div>
                 )}
 
@@ -64,9 +68,12 @@ export function Library() {
                 {selected && (
                     <div className="fixed inset-0 z-40 lg:hidden">
                         <div className="absolute inset-0 bg-black/60" onClick={() => setSelectedId(null)} />
-                        <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-ink-800 bg-ink-950 p-5">
+                        <aside
+                            aria-label="List contents"
+                            className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-ink-800 bg-ink-950 p-5"
+                        >
                             <PlaylistContents playlistId={selected} onClose={() => setSelectedId(null)} />
-                        </div>
+                        </aside>
                     </div>
                 )}
             </div>

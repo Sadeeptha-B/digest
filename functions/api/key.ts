@@ -10,6 +10,7 @@ import { expireCookie, isCrossSite, json, serializeCookie } from '../_lib/http'
 // out of localStorage and unreadable by page JS, while remaining per-user via the cookie.
 
 const YT_VALIDATE = 'https://www.googleapis.com/youtube/v3/videos?part=id&id=BaW_jenozKc&maxResults=1&key='
+const YT_UNAVAILABLE_MESSAGE = 'Could not reach Google to validate the key. Try again later.'
 
 export const onRequestGet: PagesFunction = async ({ request }) => {
     return json({ configured: Boolean(readApiKey(request)) })
@@ -35,16 +36,25 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
 
     // Validate against the Data API (1 quota unit). This also surfaces the common mistake of an
     // HTTP-referrer-restricted key, which fails server-side — it must be API-restricted instead.
-    const probe = await fetch(`${YT_VALIDATE}${encodeURIComponent(key as string)}`)
+    let probe: Response
+    try {
+        probe = await fetch(`${YT_VALIDATE}${encodeURIComponent(key as string)}`)
+    } catch {
+        return json({ error: 'upstream_unavailable', message: YT_UNAVAILABLE_MESSAGE }, { status: 502 })
+    }
     if (!probe.ok) {
-        let message = 'That API key was rejected by Google.'
+        // 4xx is about the key (invalid, wrong restriction, API not enabled, quota); 5xx is Google.
+        const keyProblem = probe.status < 500
+        let message = keyProblem ? 'That API key was rejected by Google.' : YT_UNAVAILABLE_MESSAGE
         try {
             const body = (await probe.json()) as { error?: { message?: string } }
             if (body?.error?.message) message = body.error.message
         } catch {
             /* keep the default message */
         }
-        return json({ error: 'invalid_key', message }, { status: 400 })
+        return keyProblem
+            ? json({ error: 'invalid_key', message }, { status: 400 })
+            : json({ error: 'upstream_unavailable', message }, { status: 502 })
     }
 
     return json(

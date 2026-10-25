@@ -1,21 +1,8 @@
 import { useEffect, useState, type RefObject } from 'react'
 import type { YouTubePlayer } from 'react-youtube'
 import { getCardForVideo, type RecallCard } from '../lib/recall'
-import { fmt } from '../lib/time'
+import { fmt, hmsToSeconds } from '../lib/time'
 import type { Video } from '../types'
-
-/** Parse a Recall time code ("mm:ss" or "hh:mm:ss") to seconds; null if it isn't one. */
-function hmsToSeconds(ts: string): number | null {
-  const parts = ts.trim().split(':')
-  if (parts.length < 2 || parts.length > 3) return null
-  let sec = 0
-  for (const p of parts) {
-    const n = Number(p)
-    if (!Number.isFinite(n)) return null
-    sec = sec * 60 + n
-  }
-  return sec
-}
 
 type State =
   | { status: 'loading' }

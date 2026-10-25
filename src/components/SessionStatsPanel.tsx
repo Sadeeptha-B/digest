@@ -1,42 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { fmt } from '../lib/time'
-import type { PomodoroEvent, Video } from '../types'
+import { summarizeSession, type Stretch } from '../lib/sessionStats'
+import type { Video } from '../types'
 
-interface Stretch {
-  durationSec: number
-  kind: 'work-complete' | 'pause-reset'
-  at: number
-}
-
-interface OpenStretch {
-  /** wall ms the in-progress block started */
-  startedAt: number
-  /** wall ms already spent held (paused), excluded from focus time */
-  heldMs: number
-  /** wall ms the current hold began, or null if actively running */
-  heldSince: number | null
-}
-
-function parse(events: PomodoroEvent[]) {
-  const stretches: Stretch[] = []
-  let open: OpenStretch | null = null
-  for (const e of events) {
-    if (e.type === 'work-start') open = { startedAt: e.at, heldMs: 0, heldSince: null }
-    else if (e.type === 'pause-hold') {
-      if (open && open.heldSince === null) open.heldSince = e.at
-    } else if (e.type === 'resume') {
-      if (open && open.heldSince !== null) {
-        open.heldMs += e.at - open.heldSince
-        open.heldSince = null
-      }
-    } else if (e.type === 'work-complete' || e.type === 'pause-reset') {
-      const durationSec = e.stretchSec ?? (open ? (e.at - open.startedAt - open.heldMs) / 1000 : 0)
-      stretches.push({ durationSec, kind: e.type, at: e.at })
-      open = null
-    }
-  }
-  return { stretches, open }
+const STRETCH_ROW: Record<Stretch['kind'], { icon: string; color: string; label: string }> = {
+  'work-complete': { icon: '✓', color: 'text-accent-400', label: 'Completed block' },
+  'pause-reset': { icon: '↺', color: 'text-amber-400', label: 'Reset (paused)' },
+  interrupted: { icon: '■', color: 'text-zinc-500', label: 'Stopped early' },
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -59,8 +30,6 @@ export function SessionStatsPanel({ video }: { video: Video }) {
     return () => window.clearInterval(id)
   }, [])
 
-  const { stretches, open } = useMemo(() => parse(events ?? []), [events])
-
   if (!events || events.length === 0) {
     return (
       <div className="px-1">
@@ -72,17 +41,18 @@ export function SessionStatsPanel({ video }: { video: Video }) {
     )
   }
 
-  const completed = stretches.filter((s) => s.kind === 'work-complete')
-  const resets = stretches.filter((s) => s.kind === 'pause-reset').length
-  const totalFocusSec = completed.reduce((sum, s) => sum + s.durationSec, 0)
-  // Freeze the live counter at the moment of a hold so it reflects true focus time, not wall time.
-  const isHeld = open?.heldSince != null
-  const currentSec = open
-    ? Math.max(0, ((open.heldSince ?? now) - open.startedAt - open.heldMs) / 1000)
-    : 0
-  const longestSec = Math.max(0, currentSec, ...stretches.map((s) => s.durationSec))
-  const breaksTaken = events.filter((e) => e.type === 'break-complete').length
-  const breaksSkipped = events.filter((e) => e.type === 'break-skipped').length
+  const {
+    stretches,
+    open,
+    completedCount,
+    resets,
+    totalFocusSec,
+    currentSec,
+    isHeld,
+    longestSec,
+    breaksTaken,
+    breaksSkipped,
+  } = summarizeSession(events, now)
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -99,7 +69,7 @@ export function SessionStatsPanel({ video }: { video: Video }) {
       <div className="grid grid-cols-2 gap-2">
         <Stat label="Total focused" value={fmt(totalFocusSec)} />
         <Stat label="Longest stretch" value={fmt(longestSec)} />
-        <Stat label="Blocks completed" value={String(completed.length)} />
+        <Stat label="Blocks completed" value={String(completedCount)} />
         <Stat label="Resets" value={String(resets)} />
         <Stat label="Breaks taken" value={String(breaksTaken)} />
         <Stat label="Breaks skipped" value={String(breaksSkipped)} />
@@ -127,12 +97,8 @@ export function SessionStatsPanel({ video }: { video: Video }) {
               className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm hover:bg-ink-800"
             >
               <span className="flex items-center gap-2">
-                <span className={s.kind === 'work-complete' ? 'text-accent-400' : 'text-amber-400'}>
-                  {s.kind === 'work-complete' ? '✓' : '↺'}
-                </span>
-                <span className="text-zinc-300">
-                  {s.kind === 'work-complete' ? 'Completed block' : 'Reset (paused)'}
-                </span>
+                <span className={STRETCH_ROW[s.kind].color}>{STRETCH_ROW[s.kind].icon}</span>
+                <span className="text-zinc-300">{STRETCH_ROW[s.kind].label}</span>
               </span>
               <span className="font-mono text-xs text-zinc-400">{fmt(s.durationSec)}</span>
             </li>

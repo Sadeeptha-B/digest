@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { useStore } from '../store/useStore'
+import { POMODORO_LENGTH_RANGE, useStore } from '../store/useStore'
 import { signOut, tokenIsValid } from '../lib/oauth'
 import { clearApiKey } from '../lib/apiKey'
 import { clearRecallKey } from '../lib/recallKey'
@@ -41,6 +41,51 @@ function InfoTip({ text }: { text: string }) {
     )
 }
 
+/**
+ * A whole-minutes number field. Edits stay a local draft and are committed on blur or Enter —
+ * committing per keystroke would let the store clamp a partial entry ("1" on the way to "15") to the
+ * minimum. The store owns the valid range (normalizeSettings); `min`/`max` only drive the native
+ * spinner and its semantics.
+ */
+function MinutesInput({
+    label,
+    value,
+    min,
+    max,
+    onCommit,
+}: {
+    label: string
+    value: number
+    min: number
+    max: number
+    onCommit: (minutes: number) => void
+}) {
+    const [draft, setDraft] = useState<string | null>(null)
+
+    function commit() {
+        if (draft === null) return
+        const n = Number(draft)
+        if (draft.trim() !== '' && Number.isFinite(n)) onCommit(n)
+        setDraft(null)
+    }
+
+    return (
+        <input
+            type="number"
+            aria-label={label}
+            min={min}
+            max={max}
+            value={draft ?? value}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') commit()
+            }}
+            className="w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
+        />
+    )
+}
+
 export function SettingsModal({ onClose }: { onClose: () => void }) {
     const accessToken = useStore((s) => s.accessToken)
     const hasSignedIn = useStore((s) => s.hasSignedIn)
@@ -73,10 +118,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     async function handleClearData() {
         setClearError(null)
         setClearBusy(true)
-        if (signedIn) signOut()
-        const results = await Promise.allSettled([clearApiKey(), clearRecallKey()])
+        // End the server session even if this browser thinks it's signed out: the refresh cookie can
+        // outlive the local flag (an earlier sign-out, or attempt at this, that couldn't reach the server).
+        const results = await Promise.allSettled([signOut(), clearApiKey(), clearRecallKey()])
         if (results.some((r) => r.status === 'rejected')) {
-            setClearError('Could not clear all server-side credentials. Try again while online.')
+            setClearError('Could not remove every server-side credential, so your library was kept. Try again while online.')
             setClearBusy(false)
             return
         }
@@ -130,7 +176,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                                     <span className="h-2 w-2 rounded-full bg-accent-400" /> Signed in
                                 </span>
                                 <button
-                                    onClick={() => signOut()}
+                                    onClick={() => void signOut().catch(() => { })}
                                     className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-ink-800"
                                 >
                                     Sign out
@@ -276,16 +322,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                         <InfoTip text="Length of each focus block. For videos over 15 minutes, a timeline of blocks with skippable 5-minute breaks appears below the video." />
                     </label>
                     <div className="mt-2 flex items-center gap-2">
-                        <input
-                            type="number"
-                            min={5}
-                            max={60}
+                        <MinutesInput
+                            label="Pomodoro length (minutes)"
                             value={pomodoroLengthMin}
-                            onChange={(e) => {
-                                const n = Math.round(Number(e.target.value))
-                                if (Number.isFinite(n)) setPomodoroLength(Math.min(60, Math.max(5, n)))
-                            }}
-                            className="w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
+                            min={POMODORO_LENGTH_RANGE.min}
+                            max={POMODORO_LENGTH_RANGE.max}
+                            onCommit={setPomodoroLength}
                         />
                         <span className="text-sm text-zinc-400">minutes</span>
                     </div>
@@ -296,16 +338,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                         <InfoTip text="Pause in the first N minutes of a block and it resets — resume starts fresh. Pause later and the timer holds, keeping your progress. Set to 0 to never reset." />
                     </label>
                     <div className="mt-2 flex items-center gap-2">
-                        <input
-                            type="number"
+                        <MinutesInput
+                            label="Reset threshold (minutes)"
+                            value={resetThresholdMin}
                             min={0}
                             max={pomodoroLengthMin}
-                            value={resetThresholdMin}
-                            onChange={(e) => {
-                                const n = Math.round(Number(e.target.value))
-                                if (Number.isFinite(n)) setResetThreshold(Math.min(pomodoroLengthMin, Math.max(0, n)))
-                            }}
-                            className="w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-accent-500"
+                            onCommit={setResetThreshold}
                         />
                         <span className="text-sm text-zinc-400">minutes</span>
                     </div>

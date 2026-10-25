@@ -20,3 +20,16 @@ export function timeAgo(epochMs: number, now = Date.now()): string {
   const days = Math.round(hr / 24)
   return `${days}d ago`
 }
+
+/** Parse a time code ("mm:ss" or "h:mm:ss") to seconds; null if it isn't one. */
+export function hmsToSeconds(ts: string): number | null {
+  const parts = ts.trim().split(':')
+  if (parts.length < 2 || parts.length > 3) return null
+  let sec = 0
+  for (const p of parts) {
+    const n = Number(p)
+    if (!Number.isFinite(n)) return null
+    sec = sec * 60 + n
+  }
+  return sec
+}

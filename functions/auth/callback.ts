@@ -1,20 +1,25 @@
 import {
+    classifyTokenError,
     clearCookie,
     cookie,
     Env,
     GOOGLE_TOKEN,
     parseCookies,
     popupResponse,
+    readTokenResponse,
     REFRESH_COOKIE,
     REFRESH_MAX_AGE,
     STATE_COOKIE,
     VERIFIER_COOKIE,
 } from '../_lib/google'
 
-interface TokenResponse {
-    access_token: string
-    expires_in: number
-    refresh_token?: string
+// Our own explanations for Google's error codes, where the raw code would leave the user stuck.
+// access_denied is both "Cancel" on the consent screen and Google refusing an account that isn't on
+// the OAuth project's Test users list (see README §1) — either way the API key is the way in.
+const OAUTH_ERROR_DESCRIPTIONS: Record<string, string> = {
+    access_denied:
+        "Sign-in was cancelled, or this Google account isn't approved for Digest yet. " +
+        'You can use a public API key instead.',
 }
 
 // GET /auth/callback — Google redirects here with `code` + `state`. Validate state, exchange the
@@ -36,7 +41,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const oauthError = url.searchParams.get('error')
-    if (oauthError) return popupResponse(origin, { error: oauthError }, clearTransient)
+    if (oauthError) {
+        const description = OAUTH_ERROR_DESCRIPTIONS[oauthError] ?? url.searchParams.get('error_description')
+        return popupResponse(
+            origin,
+            { error: oauthError, ...(description ? { error_description: description } : {}) },
+            clearTransient,
+        )
+    }
 
     const code = url.searchParams.get('code')
     const state = url.searchParams.get('state')
@@ -56,27 +68,42 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         )
     }
 
-    const res = await fetch(GOOGLE_TOKEN, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            code,
-            client_id: env.GOOGLE_CLIENT_ID,
-            client_secret: env.GOOGLE_CLIENT_SECRET,
-            redirect_uri: `${origin}/auth/callback`,
-            grant_type: 'authorization_code',
-            code_verifier: verifier,
-        }),
-    })
+    const exchangeFailed = popupResponse(
+        origin,
+        { error: 'token_exchange_failed', error_description: 'Could not complete sign-in.' },
+        clearTransient,
+    )
+    let res: Response
+    try {
+        res = await fetch(GOOGLE_TOKEN, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code,
+                client_id: env.GOOGLE_CLIENT_ID,
+                client_secret: env.GOOGLE_CLIENT_SECRET,
+                redirect_uri: `${origin}/auth/callback`,
+                grant_type: 'authorization_code',
+                code_verifier: verifier,
+            }),
+        })
+    } catch {
+        // Always answer the popup, so the SPA reports a failure instead of waiting for it to close.
+        return exchangeFailed
+    }
     if (!res.ok) {
-        return popupResponse(
-            origin,
-            { error: 'token_exchange_failed', error_description: 'Could not complete sign-in.' },
-            clearTransient,
-        )
+        if ((await classifyTokenError(res)) === 'misconfigured') {
+            return popupResponse(
+                origin,
+                { error: 'server_misconfigured', error_description: 'Google sign-in is not configured correctly on the server.' },
+                clearTransient,
+            )
+        }
+        return exchangeFailed
     }
 
-    const token = (await res.json()) as TokenResponse
+    const token = await readTokenResponse(res)
+    if (!token) return exchangeFailed
     const setCookies = [...clearTransient]
     // A refresh token is only present on the first consent (prompt=consent makes Google re-issue
     // it). Keep the existing cookie if Google omits it.

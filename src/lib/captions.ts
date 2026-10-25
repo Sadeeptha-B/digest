@@ -43,3 +43,14 @@ export function parseVtt(vtt: string): TranscriptLine[] {
 export function parseCaptionFile(text: string): TranscriptLine[] {
   return parseVtt(text)
 }
+
+/** Index of the line playing at `timeSec` (the last line starting at or before it, with a small
+ *  lead so highlighting doesn't lag), or -1 before the first line. Lines are in start order. */
+export function activeLineIndex(lines: TranscriptLine[], timeSec: number): number {
+  let idx = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startSec <= timeSec + 0.25) idx = i
+    else break
+  }
+  return idx
+}
